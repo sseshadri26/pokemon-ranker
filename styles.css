@@ -258,11 +258,17 @@ h2 {
   letter-spacing: -0.04em;
   line-height: 0.92;
 }
-.scope {
-  margin: 10px 0 0;
+.form-name { margin: 6px 0 0; color: var(--card-muted); }
+.card.has-forms h2 { font-size: clamp(1.7rem, 3vw, 2.5rem); }
+.covers {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--coral) 16%, var(--card));
+  color: var(--card-ink);
   font-weight: 750;
-  font-size: 1rem;
-  letter-spacing: -0.01em;
+  font-size: 0.98rem;
+  text-align: center;
 }
 .types { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .type {
@@ -284,14 +290,18 @@ h2 {
 .hint { display: block; margin-top: 12px; color: var(--card-muted); font-size: 0.95rem; font-weight: 700; }
 .forms {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
-  max-height: min(48vh, 440px);
-  overflow: auto;
-  margin: 4px 0 0;
-  padding: 2px 2px 8px;
+  align-content: start;
+  max-height: min(52vh, 480px);
+  margin: 10px 0 0;
+  padding: 2px 4px 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   list-style: none;
   touch-action: pan-y;
+  scrollbar-gutter: stable;
 }
 .form-tile {
   background: color-mix(in srgb, var(--card-ink) 6%, var(--card));
@@ -311,10 +321,11 @@ h2 {
 .form-tile-name {
   display: block;
   margin-top: 4px;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   font-weight: 750;
-  line-height: 1.2;
+  line-height: 1.25;
   color: var(--card-ink);
+  overflow-wrap: break-word;
 }
 .form-tile .types { justify-content: center; margin-top: 6px; }
 

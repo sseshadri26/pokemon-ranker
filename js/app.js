@@ -155,26 +155,24 @@
     var many = forms.length > 1;
     var hint = side === "a" ? "←" : "→";
     var testId = side === "a" ? "pick-a" : "pick-b";
-    var scope = many ? "One vote covers all " + forms.length + " forms" : "One vote covers this Pokémon";
     var aria = many ? "Pick " + mon.name + ", all " + forms.length + " forms" : "Pick " + mon.name;
-    var pickLabel = many ? "Pick all " + forms.length + " forms " + hint : "Pick " + hint;
     var head = '<p class="dex-no">#' + String(mon.id).padStart(4, "0") + "</p>" +
       "<h2>" + esc(mon.name) + "</h2>" +
-      '<p class="meta">' + metaLine(mon) + "</p>" +
-      '<p class="scope">' + esc(scope) + "</p>";
+      '<p class="meta">' + metaLine(mon) + "</p>";
     if (!many) {
       var only = forms[0];
+      var formName = only.name !== mon.name ? '<p class="form-name">' + esc(only.name) + "</p>" : "";
       return '<article class="card ' + side + '">' +
         '<button type="button" class="pick" data-testid="' + testId + '" data-side="' + side +
         '" aria-label="' + esc(aria) + '">' +
         '<div class="portrait">' + portraitHtml(only.art || mon.art, only.pixel, mon.name) + "</div>" +
-        head +
+        head + formName +
         '<div class="types">' + typeChips(only.types) + "</div>" +
-        '<span class="hint">' + esc(pickLabel) + "</span></button></article>";
+        '<span class="hint">Pick ' + hint + "</span></button></article>";
     }
     var tiles = forms.map(function (entry) {
       return '<li class="form-tile">' +
-        '<div class="tile-art">' + portraitHtml(entry.art || mon.art, entry.pixel, entry.name) + "</div>" +
+        '<div class="tile-art">' + portraitHtml(entry.art, entry.pixel, entry.name) + "</div>" +
         '<span class="form-tile-name">' + esc(entry.name) + "</span>" +
         '<span class="types">' + typeChips(entry.types) + "</span></li>";
     }).join("");
@@ -182,7 +180,8 @@
       '<button type="button" class="pick" data-testid="' + testId + '" data-side="' + side +
       '" aria-label="' + esc(aria) + '">' +
       head +
-      '<span class="hint">' + esc(pickLabel) + "</span></button>" +
+      '<span class="hint">' + esc(aria) + "</span></button>" +
+      '<p class="covers">One vote covers all ' + forms.length + " forms</p>" +
       '<ol class="forms" aria-label="' + esc(mon.name) + ' forms">' + tiles + "</ol></article>";
   }
 
@@ -414,7 +413,11 @@
   els.stage.addEventListener("pointerdown", function (event) {
     if (event.button !== 0 && event.pointerType === "mouse") return;
     if (event.target.closest(".forms")) return;
-    drag = { x: event.clientX, y: event.clientY, id: event.pointerId };
+    var pick = event.target.closest(".pick");
+    var side = null;
+    if (pick && els.cardA.contains(pick)) side = "a";
+    else if (pick && els.cardB.contains(pick)) side = "b";
+    drag = { x: event.clientX, y: event.clientY, id: event.pointerId, side: side };
     try {
       els.stage.setPointerCapture(event.pointerId);
     } catch (error) {
@@ -429,11 +432,18 @@
     if (!drag || drag.id !== event.pointerId) return;
     var dx = event.clientX - drag.x;
     var dy = event.clientY - drag.y;
+    var side = drag.side;
     drag = null;
     setOffset(0);
     if (Math.abs(dx) > 64 && Math.abs(dx) > Math.abs(dy) * 1.2) {
       swiped = true;
       vote(dx > 0 ? "b" : "a");
+      return;
+    }
+    // Pointer capture retargets the gesture, so a tap on Pick may never click the button.
+    if (side) {
+      swiped = true;
+      vote(side);
     }
   }
   els.stage.addEventListener("pointerup", finishPointer);

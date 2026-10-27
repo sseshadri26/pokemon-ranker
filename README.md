@@ -28,7 +28,7 @@ The scripts are ordinary JavaScript files, not modules, so the page loads from a
 | Skip | Skip | `↑` |
 | Undo the last answer | Undo | `Backspace`, `Ctrl+Z`, or `Cmd+Z` |
 
-The form grid shows every look at once, with its name and types. Scrolling it does not vote. A swipe starts on the card outside that grid.
+The form grid shows every look at once, with its artwork, name, and types. "One vote covers all N forms" stays on screen while that grid scrolls. Clicking or scrolling the grid does not vote. A swipe starts on the card outside that grid.
 
 **Rankings** is the full order, with a score, a Laplace uncertainty, and how many matchups that species has been in. Filter by type or generation, or search by name. The header shows the matchup count and a confidence percentage.
 
