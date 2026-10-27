@@ -8,15 +8,16 @@
   --coral: #e23b2f;
   --moss: #2f7d55;
   --line: rgba(243, 236, 223, 0.14);
-  --serif: "Fraunces", "Palatino Linotype", Palatino, Georgia, serif;
-  --sans: "Outfit", "Segoe UI", sans-serif;
+  --serif: "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: "Segoe UI", "Helvetica Neue", sans-serif;
   font-family: var(--sans);
   background: var(--bg);
   color: var(--ink);
 }
 
 * { box-sizing: border-box; }
-html, body, #root { min-height: 100%; }
+[hidden] { display: none !important; }
+html, body { min-height: 100%; }
 body {
   margin: 0;
   background:

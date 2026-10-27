@@ -6,22 +6,15 @@ The ranked unit is the **base species** (National Dex #1 through the latest in P
 
 ## Run it
 
-Requires Node.js 20 or newer.
-
-```bash
-npm install && npm run dev
-```
-
-Vite prints a local URL, usually [http://localhost:5173](http://localhost:5173). The species list, traits, and artwork are already bundled, so the app works offline after `npm install`. `npm run dev` only calls PokéAPI if `src/data/pokemon.json` or `public/artwork/_manifest.json` is missing.
-
-Refresh the bundle later with `npm run fetch-data`.
-
-On Windows PowerShell 5, which does not accept `&&`, run the two commands separately:
+Open `index.html` in a browser. Double-click it, or from this folder:
 
 ```powershell
-npm install
-npm run dev
+start index.html
 ```
+
+That is the whole setup. There is no install step and no dev server. The species list, traits, and artwork are already in this folder, and the page keeps working with the network off. Answers stay in this browser.
+
+The scripts are ordinary JavaScript files, not modules, so the page loads from a `file://` address. Artwork paths are relative (`artwork/p6.webp`), which is what a local file can display.
 
 ## Controls
 
@@ -79,7 +72,7 @@ $$
 
 with $\sigma_w = 0.7$ and $\sigma_b = 1$. The prior on $b_i$ is the partial-pooling knob. A species you have barely rated stays near the strength its traits predict, because the offset is pulled toward 0. A species you have rated many times follows those picks: the likelihood overwhelms the prior. When two species are nearly tied on direct evidence, the one whose traits you have preferred ranks higher. The prior also pins the additive invariance of Bradley–Terry, so strengths cannot all drift upward together.
 
-Adding a trait later is a new extractor in `src/model/features.ts`. If it needs data PokéAPI (or a small table) can supply, add the field in `scripts/fetch-pokemon.mjs` and on `TraitSource`. The fitter does not change. Columns are the sorted union of whatever the extractors emit.
+Adding a trait later is a new extractor next to the others in `js/model.js` (each one returns a map of column name to number, and `extendedExtractors` is the list the page uses). If it needs data PokéAPI can supply, add the field in `scripts/fetch-pokemon.mjs` and pass it through `toTrait` in `js/ranker.js`. The fitter does not change. Columns are the sorted union of whatever the extractors emit.
 
 ### Fitting
 
@@ -129,17 +122,23 @@ The header's confidence meter is the practical progress readout. The 8,800 figur
 
 ## Tests
 
+The checks use Node's built-in test runner. Node is only for that, and for rebuilding the bundle. Opening the page does not need it.
+
 ```bash
-npm test
+node --test
 ```
 
 The suite covers the fit (including a numerical gradient check at the mode), half-win ties, skips, multi-level undo, trait-weight learning, partial pooling, the Laplace prior variance, and pair selection. One simulation hides a true strength vector, answers with noisy Bradley–Terry preferences, and checks that information-gain pairing reaches a higher Kendall tau than random pairing after the same number of duels. Another checks that choosing the next pair among all 1,025 species stays under 100ms.
 
 ## Project layout
 
-- `src/model` — features, fit, selection, history, summary
-- `src/ui` — duel and rankings
-- `scripts/fetch-pokemon.mjs` — one-shot PokéAPI pull
-- `src/data/pokemon.json` and `public/artwork` — the offline bundle
+- `index.html`, `styles.css`, `js/app.js` — the page
+- `js/model.js` — features, fit, selection, history, summary
+- `js/ranker.js` — answer log, storage, and the live ranking
+- `data/pokedex.js` — the dex, inlined so the page does not have to fetch JSON
+- `data/pokemon.json` and `artwork/` — the same offline bundle
+- `scripts/fetch-pokemon.mjs` — optional PokéAPI refresh
 
 Four ride forms of Koraidon and Miraidon have no sprite in the PokéAPI artwork set. Those thumbnails fall back to a monogram; the species still rank.
+
+Rebuilding that bundle is optional. It needs Node and the `sharp` package, then `node scripts/fetch-pokemon.mjs` from this folder. The copy already in the repo is what the page uses.

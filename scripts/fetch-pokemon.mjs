@@ -1,11 +1,12 @@
 /**
  * Pull every National Dex species from PokéAPI and write:
- *   src/data/pokemon.json
- *   public/artwork/*.webp
- *   public/artwork/_manifest.json
+ *   data/pokemon.json
+ *   data/pokedex.js
+ *   artwork/*.webp
+ *   artwork/_manifest.json
  *
- * Re-running skips artwork that is already on disk. The dev server runs
- * scripts/ensure-data.mjs first, which no-ops once the manifest exists.
+ * Re-running skips artwork that is already on disk. The page itself does not
+ * run this script; the bundle in the repo is what index.html opens.
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
@@ -15,8 +16,9 @@ import sharp from "sharp";
 const ENDPOINT = "https://beta.pokeapi.co/graphql/v1beta";
 const SPRITE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon";
 const ROOT = process.cwd();
-const DATA_PATH = path.join(ROOT, "src", "data", "pokemon.json");
-const ART_DIR = path.join(ROOT, "public", "artwork");
+const DATA_PATH = path.join(ROOT, "data", "pokemon.json");
+const POKEDEX_JS_PATH = path.join(ROOT, "data", "pokedex.js");
+const ART_DIR = path.join(ROOT, "artwork");
 const MANIFEST_PATH = path.join(ART_DIR, "_manifest.json");
 
 const STARTER_BASES = new Set([
@@ -344,7 +346,9 @@ async function main() {
     count: pokemon.length,
     pokemon,
   };
-  await writeFile(DATA_PATH, JSON.stringify(payload));
+  const packed = JSON.stringify(payload);
+  await writeFile(DATA_PATH, packed);
+  await writeFile(POKEDEX_JS_PATH, `var POKEDEX_BUNDLE = ${packed};\n`);
   await writeFile(
     MANIFEST_PATH,
     JSON.stringify({ species: pokemon.length, files: uniqueJobs.length - failed, failed }, null, 2),
