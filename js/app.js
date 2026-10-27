@@ -16,8 +16,6 @@
   var pokemon = (bundle && bundle.pokemon) || [];
   var ranker = window.FavordexRanker.createRanker(pokemon);
   var view = "duel";
-  var formA = 0;
-  var formB = 0;
   var pairKey = "";
   var offset = 0;
   var drag = null;
@@ -129,47 +127,63 @@
     return [{ name: mon.name, art: mon.art, types: mon.types, kind: "default", pixel: false }];
   }
 
-  function cardHtml(mon, side, formIndex) {
-    var forms = formsOf(mon);
-    var index = Math.min(formIndex, forms.length - 1);
-    var form = forms[index];
-    var portrait = artUrl(form.art) || artUrl(mon.art);
-    var hint = side === "a" ? "←" : "→";
-    var testId = side === "a" ? "pick-a" : "pick-b";
-    var portraitHtml = portrait
-      ? '<img src="' + esc(portrait) + '" alt="" class="' + (form.pixel ? "pixel" : "") + '" draggable="false">'
-      : '<span class="monogram">' + esc(mon.name.slice(0, 1)) + "</span>";
-    var formName = form.name !== mon.name ? '<p class="form-name">' + esc(form.name) + "</p>" : "";
-    var types = form.types.map(function (type) {
+  function typeChips(types) {
+    return types.map(function (type) {
       return '<span class="type" style="background:' + typeColor(type) + ";color:" + typeInk(type) + '">' +
         esc(titleType(type)) + "</span>";
     }).join("");
+  }
+
+  function metaLine(mon) {
     var meta = "<span>" + esc(generationLabel(mon.generation)) + "</span>";
     if (mon.stage > 1) meta += "<span>Stage " + mon.stage + "</span>";
     if (mon.starter) meta += "<span>Starter</span>";
     if (mon.legendary) meta += "<span>Legendary</span>";
     if (mon.mythical) meta += "<span>Mythical</span>";
     if (mon.baby) meta += "<span>Baby</span>";
-    var strip = "";
-    if (forms.length > 1) {
-      strip = '<div class="forms" aria-label="' + esc(mon.name) + ' forms">' + forms.map(function (entry, i) {
-        var thumb = entry.art
-          ? '<img src="' + esc(artUrl(entry.art)) + '" alt="" class="' + (entry.pixel ? "pixel" : "") + '" draggable="false">'
-          : "<span>" + esc(entry.name.slice(0, 1)) + "</span>";
-        return '<button type="button" class="form' + (i === index ? " on" : "") + '" data-index="' + i +
-          '" aria-pressed="' + (i === index ? "true" : "false") + '">' + thumb +
-          "<span>" + esc(entry.name) + "</span></button>";
-      }).join("") + "</div>";
+    return meta;
+  }
+
+  function portraitHtml(file, pixel, fallback) {
+    var src = artUrl(file);
+    if (!src) return '<span class="monogram">' + esc(fallback.slice(0, 1)) + "</span>";
+    return '<img src="' + esc(src) + '" alt="" class="' + (pixel ? "pixel" : "") + '" draggable="false">';
+  }
+
+  function cardHtml(mon, side) {
+    var forms = formsOf(mon);
+    var many = forms.length > 1;
+    var hint = side === "a" ? "←" : "→";
+    var testId = side === "a" ? "pick-a" : "pick-b";
+    var scope = many ? "One vote covers all " + forms.length + " forms" : "One vote covers this Pokémon";
+    var aria = many ? "Pick " + mon.name + ", all " + forms.length + " forms" : "Pick " + mon.name;
+    var pickLabel = many ? "Pick all " + forms.length + " forms " + hint : "Pick " + hint;
+    var head = '<p class="dex-no">#' + String(mon.id).padStart(4, "0") + "</p>" +
+      "<h2>" + esc(mon.name) + "</h2>" +
+      '<p class="meta">' + metaLine(mon) + "</p>" +
+      '<p class="scope">' + esc(scope) + "</p>";
+    if (!many) {
+      var only = forms[0];
+      return '<article class="card ' + side + '">' +
+        '<button type="button" class="pick" data-testid="' + testId + '" data-side="' + side +
+        '" aria-label="' + esc(aria) + '">' +
+        '<div class="portrait">' + portraitHtml(only.art || mon.art, only.pixel, mon.name) + "</div>" +
+        head +
+        '<div class="types">' + typeChips(only.types) + "</div>" +
+        '<span class="hint">' + esc(pickLabel) + "</span></button></article>";
     }
-    return '<article class="card ' + side + '">' +
+    var tiles = forms.map(function (entry) {
+      return '<li class="form-tile">' +
+        '<div class="tile-art">' + portraitHtml(entry.art || mon.art, entry.pixel, entry.name) + "</div>" +
+        '<span class="form-tile-name">' + esc(entry.name) + "</span>" +
+        '<span class="types">' + typeChips(entry.types) + "</span></li>";
+    }).join("");
+    return '<article class="card ' + side + ' has-forms">' +
       '<button type="button" class="pick" data-testid="' + testId + '" data-side="' + side +
-      '" aria-label="Pick ' + esc(mon.name) + '">' +
-      '<div class="portrait">' + portraitHtml + "</div>" +
-      '<p class="dex-no">#' + String(mon.id).padStart(4, "0") + "</p>" +
-      "<h2>" + esc(mon.name) + "</h2>" + formName +
-      '<div class="types">' + types + "</div>" +
-      '<p class="meta">' + meta + "</p>" +
-      '<span class="hint">Pick ' + hint + "</span></button>" + strip + "</article>";
+      '" aria-label="' + esc(aria) + '">' +
+      head +
+      '<span class="hint">' + esc(pickLabel) + "</span></button>" +
+      '<ol class="forms" aria-label="' + esc(mon.name) + ' forms">' + tiles + "</ol></article>";
   }
 
   function renderHeader() {
@@ -196,13 +210,11 @@
     var key = pair.left.id + ":" + pair.right.id;
     if (key !== pairKey) {
       pairKey = key;
-      formA = 0;
-      formB = 0;
       setOffset(0);
     }
-    els.live.textContent = pair.left.name + " versus " + pair.right.name;
-    els.cardA.innerHTML = cardHtml(pair.left, "a", formA);
-    els.cardB.innerHTML = cardHtml(pair.right, "b", formB);
+    els.live.textContent = votePhrase(pair.left) + " versus " + votePhrase(pair.right);
+    els.cardA.innerHTML = cardHtml(pair.left, "a");
+    els.cardB.innerHTML = cardHtml(pair.right, "b");
     els.undo.disabled = state().history.length === 0;
   }
 
@@ -267,24 +279,22 @@
     if (view === "board") renderBoard();
   }
 
+  function votePhrase(mon) {
+    var count = formsOf(mon).length;
+    return count > 1 ? mon.name + ", all " + count + " forms" : mon.name;
+  }
+
   function setOffset(px) {
     offset = px;
     els.seal.style.transform = "translateX(" + (offset * 0.15) + "px)";
     els.hint.style.opacity = Number.isFinite(offset) ? String(Math.min(1, Math.abs(offset) / 90)) : "0";
     var pair = sides();
     if (!pair.left || offset === 0) els.hint.textContent = "Swipe or tap";
-    else els.hint.textContent = offset < 0 ? "Pick " + pair.left.name : "Pick " + pair.right.name;
+    else els.hint.textContent = offset < 0 ? "Pick " + votePhrase(pair.left) : "Pick " + votePhrase(pair.right);
   }
 
   function onCardClick(event, side) {
-    var host = side === "a" ? els.cardA : els.cardB;
-    var form = event.target.closest(".form");
-    if (form && host.contains(form)) {
-      if (side === "a") formA = Number(form.dataset.index);
-      else formB = Number(form.dataset.index);
-      renderDuel();
-      return;
-    }
+    if (event.target.closest(".forms")) return;
     if (!event.target.closest(".pick")) return;
     if (swiped) {
       swiped = false;
@@ -428,6 +438,18 @@
   }
   els.stage.addEventListener("pointerup", finishPointer);
   els.stage.addEventListener("pointercancel", finishPointer);
+
+  var dexTheme = document.getElementById("dex-theme");
+  dexTheme.value = document.documentElement.dataset.dex || "1";
+  dexTheme.addEventListener("change", function () {
+    var next = /^[1-9]$/.test(dexTheme.value) ? dexTheme.value : "1";
+    document.documentElement.dataset.dex = next;
+    try {
+      localStorage.setItem("favordex.dex.v1", next);
+    } catch (error) {
+      /* The look still changes for this visit. */
+    }
+  });
 
   render();
 })();

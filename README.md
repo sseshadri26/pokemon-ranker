@@ -2,7 +2,9 @@
 
 Rank the National Dex by how much **you** like each Pokémon. Favordex shows two species at a time. Every answer updates a personal Bradley–Terry ranking. Nothing leaves the browser: there is no account and no server.
 
-The ranked unit is the **base species** (National Dex #1 through the latest in PokéAPI, 1,025 as of this bundle). Alternate forms — Mega, Gigantamax, regional, and the rest — appear on the card so you can see the whole family's looks, but they are not separate ranked entries.
+The ranked unit is the **base species** (National Dex #1 through the latest in PokéAPI, 1,025 as of this bundle). Every alternate form — Mega, Gigantamax, regional, and the rest — is drawn on that species' card. One vote covers all of them. They are not separate ranked entries.
+
+The **Pokédex** menu restyles the shell as the dex from any region, Kanto through Paldea. That choice is saved in this browser under `favordex.dex.v1`.
 
 ## Run it
 
@@ -20,13 +22,13 @@ The scripts are ordinary JavaScript files, not modules, so the page loads from a
 
 | Action | Mouse / touch | Keyboard |
 | --- | --- | --- |
-| Pick the left species | Click or tap its card, or swipe left | `←` |
-| Pick the right species | Click or tap its card, or swipe right | `→` |
+| Pick the left species, every form | Click or tap **Pick**, or swipe left outside the form grid | `←` |
+| Pick the right species, every form | Click or tap **Pick**, or swipe right outside the form grid | `→` |
 | Tie | Tie | `↓` |
 | Skip | Skip | `↑` |
 | Undo the last answer | Undo | `Backspace`, `Ctrl+Z`, or `Cmd+Z` |
 
-Form thumbnails scroll sideways and do not cast a vote. A swipe starts anywhere on a card except that strip.
+The form grid shows every look at once, with its name and types. Scrolling it does not vote. A swipe starts on the card outside that grid.
 
 **Rankings** is the full order, with a score, a Laplace uncertainty, and how many matchups that species has been in. Filter by type or generation, or search by name. The header shows the matchup count and a confidence percentage.
 
@@ -139,6 +141,6 @@ The suite covers the fit (including a numerical gradient check at the mode), hal
 - `data/pokemon.json` and `artwork/` — the same offline bundle
 - `scripts/fetch-pokemon.mjs` — optional PokéAPI refresh
 
-Four ride forms of Koraidon and Miraidon have no sprite in the PokéAPI artwork set. Those thumbnails fall back to a monogram; the species still rank.
+Four ride forms of Koraidon and Miraidon have no sprite in the PokéAPI artwork set. Those forms show a monogram instead of artwork; the species still rank.
 
 Rebuilding that bundle is optional. It needs Node and the `sharp` package, then `node scripts/fetch-pokemon.mjs` from this folder. The copy already in the repo is what the page uses.
