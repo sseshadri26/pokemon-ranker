@@ -8,6 +8,141 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (F) {
   var STORAGE_KEY = "favordex.history.v1";
 
+  // Same order and ids as Favordex.extendedExtractors. A new extractor belongs here too.
+  var MODEL_CATEGORIES = [
+    {
+      id: "type",
+      label: "Type",
+      prefix: "type:",
+      encoding: "multi-hot",
+      detail: "One column for each type a species has. A dual-type species turns two columns on.",
+    },
+    {
+      id: "generation",
+      label: "Generation",
+      prefix: "gen:",
+      encoding: "one-hot",
+      detail: "One column for the generation the species was introduced in.",
+    },
+    {
+      id: "color",
+      label: "Color",
+      prefix: "color:",
+      encoding: "one-hot",
+      detail: "One column for the Pokédex color.",
+    },
+    {
+      id: "shape",
+      label: "Shape",
+      prefix: "shape:",
+      encoding: "one-hot",
+      detail: "One column for the body shape.",
+    },
+    {
+      id: "habitat",
+      label: "Habitat",
+      prefix: "habitat:",
+      encoding: "one-hot",
+      detail: "One column for the habitat. A species with no recorded habitat leaves this block off.",
+    },
+    {
+      id: "egg",
+      label: "Egg group",
+      prefix: "egg:",
+      encoding: "multi-hot",
+      detail: "One column for each egg group. A species can turn on more than one.",
+    },
+    {
+      id: "legendary",
+      label: "Legendary",
+      flag: "legendary",
+      encoding: "flag",
+      detail: "On for a legendary species, off otherwise.",
+    },
+    {
+      id: "mythical",
+      label: "Mythical",
+      flag: "mythical",
+      encoding: "flag",
+      detail: "On for a mythical species, off otherwise.",
+    },
+    {
+      id: "baby",
+      label: "Baby",
+      flag: "baby",
+      encoding: "flag",
+      detail: "On for a baby species, off otherwise.",
+    },
+    {
+      id: "stage",
+      label: "Evolution stage",
+      prefix: "stage:",
+      encoding: "one-hot",
+      detail: "One column for the evolution stage, from 1 up.",
+    },
+    {
+      id: "starter",
+      label: "Starter",
+      flag: "starter",
+      encoding: "flag",
+      detail: "On when the species is from a starter line.",
+    },
+  ];
+
+  function categoryIndex(name) {
+    for (var i = 0; i < MODEL_CATEGORIES.length; i++) {
+      var cat = MODEL_CATEGORIES[i];
+      if (cat.flag && name === cat.flag) return i;
+      if (cat.prefix && name.indexOf(cat.prefix) === 0) return i;
+    }
+    return -1;
+  }
+
+  function byWeight(a, b) {
+    return b.weight - a.weight || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+  }
+
+  function modelReport(fit) {
+    var buckets = MODEL_CATEGORIES.map(function () { return []; });
+    var other = [];
+    fit.featureNames.forEach(function (name, index) {
+      var row = { key: name, weight: fit.weights[index], sd: fit.weightSd[index] };
+      var at = categoryIndex(name);
+      if (at === -1) other.push(row);
+      else buckets[at].push(row);
+    });
+    var categories = MODEL_CATEGORIES.map(function (cat, index) {
+      return {
+        id: cat.id,
+        label: cat.label,
+        encoding: cat.encoding,
+        detail: cat.detail,
+        weights: buckets[index].sort(byWeight),
+      };
+    });
+    if (other.length > 0) {
+      categories.push({
+        id: "other",
+        label: "Other",
+        encoding: "column",
+        detail: "Columns the category list did not name.",
+        weights: other.sort(byWeight),
+      });
+    }
+    return {
+      family: "Hierarchical Bradley–Terry",
+      strength: "s = x·w + b",
+      probability: "σ(s_left − s_right)",
+      sigmaW: fit.sigmaW,
+      sigmaB: fit.sigmaB,
+      comparisons: fit.comparisons,
+      iterations: fit.iterations,
+      converged: fit.converged,
+      columns: fit.featureNames.length,
+      categories: categories,
+    };
+  }
+
   function toTrait(pokemon) {
     return {
       id: pokemon.id,
@@ -109,6 +244,7 @@
           };
         }),
         summary: summary,
+        model: modelReport(fit),
         leans: fit.featureNames
           .map(function (name, index) { return { name: name, weight: fit.weights[index] }; })
           .filter(function (trait) { return trait.name.indexOf("type:") === 0; })
@@ -189,5 +325,10 @@
     };
   }
 
-  return { createRanker: createRanker, STORAGE_KEY: STORAGE_KEY, toTrait: toTrait };
+  return {
+    createRanker: createRanker,
+    STORAGE_KEY: STORAGE_KEY,
+    toTrait: toTrait,
+    MODEL_CATEGORIES: MODEL_CATEGORIES,
+  };
 });

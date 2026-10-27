@@ -245,40 +245,80 @@ nav button.on { background: var(--ink); color: var(--bg); border-color: var(--in
   touch-action: pan-y;
   user-select: none;
 }
+#card-a,
+#card-b {
+  display: flex;
+  min-width: 0;
+}
 .card {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
   background: var(--card);
   color: var(--card-ink);
   border-radius: 28px;
-  padding: 16px 16px 12px;
   min-width: 0;
   box-shadow: 0 22px 50px rgba(0, 0, 0, 0.28);
 }
 .card.a { box-shadow: inset 0 0 0 1px rgba(226, 59, 47, 0.35), 0 22px 50px rgba(0, 0, 0, 0.28); }
 .card.b { box-shadow: inset 0 0 0 1px rgba(47, 125, 85, 0.4), 0 22px 50px rgba(0, 0, 0, 0.28); }
 .pick {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   width: 100%;
-  padding: 0;
+  min-height: 100%;
+  padding: 16px 16px 12px;
   border: 0;
   background: transparent;
   color: inherit;
   text-align: left;
-  border-radius: 18px;
+  border-radius: 28px;
 }
 .pick:focus-visible, nav button:focus-visible, .ghost:focus-visible, .texty:focus-visible {
   outline: 2px solid var(--coral);
   outline-offset: 3px;
 }
+#card-a, #card-b { display: flex; min-width: 0; }
+.card { flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; }
+.pick { flex: 1; display: flex; flex-direction: column; }
 .portrait {
+  position: relative;
   height: clamp(210px, 36vh, 340px);
-  display: grid;
-  place-items: center;
+  overflow: hidden;
   background:
     radial-gradient(circle at 50% 60%, rgba(255, 255, 255, 0.9), rgba(226, 214, 190, 0.35) 42%, transparent 70%);
   border-radius: 20px;
 }
-.portrait img { max-height: 92%; width: auto; filter: drop-shadow(0 16px 12px rgba(60, 36, 10, 0.18)); }
-.portrait img.pixel { width: min(200px, 68%); image-rendering: pixelated; }
+.sprite {
+  position: absolute;
+  width: calc(var(--sprite) * 100%);
+  height: calc(var(--sprite) * 100%);
+  transform: translate(-50%, -50%);
+}
+.sprite img, .sprite .monogram {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 16px 12px rgba(60, 36, 10, 0.18));
+}
+.sprite img.pixel { image-rendering: pixelated; }
+.sprite-name {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  max-width: 9.5em;
+  transform: translate(-50%, 2px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--card-ink);
+  text-shadow: 0 1px 0 var(--card);
+}
 .monogram {
   font-family: var(--serif);
   font-size: 5rem;
@@ -300,18 +340,6 @@ h2 {
   line-height: 0.92;
 }
 .form-name { margin: 6px 0 0; color: var(--card-muted); }
-.card.has-forms {
-  display: flex;
-  flex-direction: column;
-  max-height: min(92vh, 980px);
-}
-.card.has-forms h2 { font-size: clamp(1.8rem, 3vw, 2.6rem); }
-.card.has-forms .pick {
-  flex: 0 0 auto;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--card-ink) 14%, transparent);
-}
 .types { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .type {
   border-radius: 999px;
@@ -329,49 +357,7 @@ h2 {
   color: var(--card-muted);
   font-size: 0.88rem;
 }
-.hint { display: block; margin-top: 12px; color: var(--card-muted); font-size: 0.95rem; font-weight: 700; }
-.forms {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 12px;
-  align-content: start;
-  flex: 1 1 auto;
-  min-height: 240px;
-  max-height: min(64vh, 680px);
-  margin: 0;
-  padding: 2px 4px 8px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  list-style: none;
-  touch-action: pan-y;
-  scrollbar-gutter: stable;
-}
-.form-tile {
-  background: color-mix(in srgb, var(--card-ink) 6%, var(--card));
-  border: 1px solid color-mix(in srgb, var(--card-ink) 14%, transparent);
-  border-radius: 16px;
-  padding: 8px 8px 10px;
-  text-align: center;
-}
-.tile-art {
-  height: 230px;
-  display: grid;
-  place-items: center;
-}
-.tile-art img { max-height: 220px; width: auto; object-fit: contain; filter: drop-shadow(0 12px 8px rgba(60, 36, 10, 0.16)); }
-.tile-art img.pixel, .portrait img.pixel { image-rendering: pixelated; }
-.tile-art .monogram { font-size: 2.4rem; }
-.form-tile-name {
-  display: block;
-  margin-top: 4px;
-  font-size: 0.84rem;
-  font-weight: 750;
-  line-height: 1.25;
-  color: var(--card-ink);
-  overflow-wrap: break-word;
-}
-.form-tile .types { justify-content: center; margin-top: 6px; }
+.hint { display: block; margin-top: auto; padding-top: 12px; color: var(--card-muted); font-size: 0.95rem; font-weight: 700; }
 
 .versus {
   display: flex;
@@ -470,6 +456,111 @@ kbd {
 }
 .games::after { content: " played"; color: var(--muted); font-size: 0.75rem; }
 .empty { color: var(--muted); }
+
+.sheet-lead h2 { font-size: clamp(2rem, 4vw, 3rem); }
+.formula {
+  margin: 8px 0 12px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+}
+.sheet-lead p { max-width: 68ch; }
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin: 18px 0 22px;
+}
+.facts div {
+  background: var(--card);
+  color: var(--card-ink);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+.facts dt {
+  color: var(--card-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.facts dd { margin: 4px 0 0; font-weight: 700; }
+.facts code { font-family: var(--sans); font-weight: 700; }
+.traits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+.trait {
+  background: var(--card);
+  color: var(--card-ink);
+  border-radius: 18px;
+  padding: 14px 14px 8px;
+  min-width: 0;
+}
+.trait h3 {
+  margin: 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 1.7rem;
+}
+.encoding {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card-ink) 8%, transparent);
+  font-family: var(--sans);
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 4px;
+}
+.trait p { margin: 6px 0 0; color: var(--card-muted); font-size: 0.9rem; }
+.trait-count { font-weight: 700; }
+.trait-empty { margin-bottom: 10px; }
+.trait ol { list-style: none; margin: 10px 0 6px; padding: 0; }
+.trait li {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.8fr) minmax(72px, 1.3fr) 4.6em 4.2em;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 0;
+  border-top: 1px solid color-mix(in srgb, var(--card-ink) 12%, transparent);
+}
+.trait-name { font-weight: 700; }
+.track {
+  position: relative;
+  height: 10px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--card-ink) 10%, transparent);
+}
+.track::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  width: 1px;
+  height: 14px;
+  background: color-mix(in srgb, var(--card-ink) 45%, transparent);
+}
+.track i {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 99px;
+  min-width: 2px;
+}
+.track i.up { background: var(--moss); }
+.track i.down { background: var(--coral); }
+.track i.flat { min-width: 0; background: transparent; }
+.trait-num, .trait-sd { font-variant-numeric: tabular-nums; text-align: right; }
+.trait-num.up { color: var(--moss); }
+.trait-num.down { color: var(--coral); }
+.trait-num.flat { color: var(--card-muted); }
+.trait-sd { color: var(--card-muted); font-size: 0.85rem; }
 
 .modal {
   position: fixed;
@@ -677,7 +768,7 @@ html[data-dex="4"] header {
   padding: 16px 18px;
   margin: 0;
 }
-html[data-dex="4"] .duel, html[data-dex="4"] .board, html[data-dex="4"] #no-duel {
+html[data-dex="4"] .duel, html[data-dex="4"] .board, html[data-dex="4"] .sheet, html[data-dex="4"] #no-duel {
   background: #f3f6fa;
   color: #1c2430;
   border: 10px solid #3d8fd4;
@@ -917,6 +1008,8 @@ html[data-dex="9"] .card {
   .ledger li { grid-template-columns: 36px 44px minmax(0, 1fr); }
   .gen, .games { display: none; }
   .score, .sd { grid-column: 3; }
+  .trait li { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .track { grid-column: 1 / -1; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; }

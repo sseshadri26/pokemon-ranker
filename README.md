@@ -22,15 +22,17 @@ The scripts are ordinary JavaScript files, not modules, so the page loads from a
 
 | Action | Mouse / touch | Keyboard |
 | --- | --- | --- |
-| Pick the left species, every form | Click or tap **Pick**, or swipe left outside the form grid | `←` |
-| Pick the right species, every form | Click or tap **Pick**, or swipe right outside the form grid | `→` |
+| Pick the left species, every form | Click or tap the left card, or swipe left | `←` |
+| Pick the right species, every form | Click or tap the right card, or swipe right | `→` |
 | Tie | Tie | `↓` |
 | Skip | Skip | `↑` |
 | Undo the last answer | Undo | `Backspace`, `Ctrl+Z`, or `Cmd+Z` |
 
-Every form is drawn large, with the species name and Pick control underneath. Scrolling the pictures does not vote. A swipe starts on the card outside that grid.
+Every form of a species shares one picture above the name. Two forms sit side by side, three form a triangle, four form a diamond, and larger sets overlap in a ring. The left and right cards stay the same size either way. A click or swipe on that picture picks the species.
 
 **Rankings** is the full order, with a score, a Laplace uncertainty, and how many matchups that species has been in. Filter by type or generation, or search by name. The header shows the matchup count and a confidence percentage.
+
+**Model** names the predictor: hierarchical Bradley–Terry, strength `s = x·w + b`, the normal priors on the weights and the species offsets, and the alternating Newton fit. Under that it lists every trait category in `x` — type, generation, color, shape, habitat, egg group, legendary, mythical, baby, evolution stage, and starter — and the learned weight and Laplace standard deviation of each column.
 
 **Export** downloads the full answer history as JSON. **Import** replaces the current history. **Reset** clears it. History lives in `localStorage` under `favordex.history.v1`. Skips are kept in that log so they can be undone and round-tripped, and they do not affect scores.
 

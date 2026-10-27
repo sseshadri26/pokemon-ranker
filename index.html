@@ -57,6 +57,7 @@
         </label>
         <button type="button" id="view-duel" class="on">Duel</button>
         <button type="button" id="view-board">Rankings</button>
+        <button type="button" id="view-model">Model</button>
         <button type="button" id="export">Export</button>
         <button type="button" id="import">Import</button>
         <button type="button" id="reset">Reset</button>
@@ -81,7 +82,7 @@
         <div id="card-b"></div>
       </div>
       <p class="footnote">
-        Every form is pictured above the name. Scrolling those pictures does not vote.
+        Every form is pictured together above the name. A tap or swipe on the picture picks that species.
         A tie is a half-win each way. Skip records nothing.
       </p>
     </section>
@@ -117,6 +118,29 @@
       </div>
       <ol class="ledger" id="ledger"></ol>
       <p class="empty" id="filter-empty" hidden>Nothing in the dex matches that filter.</p>
+    </section>
+    <section class="sheet" id="model" hidden>
+      <div class="sheet-lead">
+        <p class="eyebrow">Prediction model</p>
+        <h2>Hierarchical Bradley–Terry</h2>
+        <p class="formula">s = x · w + b</p>
+        <p>
+          Each species has a strength s. In a decisive duel the chance the left species wins is the logistic of
+          s<sub>left</sub> − s<sub>right</sub>. The row x is that species' categories, listed below.
+          The vector w is what this tab learns from your picks. The offset b belongs to that species alone.
+        </p>
+        <p>
+          A tie counts as a half-win each way and enters the fit. A skip stays in the history so it can be undone, and it stays out of the fit.
+          Weights and offsets are the mode of a normal prior plus that likelihood, found by alternating Newton steps.
+          The ± beside a weight is its Laplace posterior standard deviation. It starts at the prior width and shrinks as matchups speak to that column.
+        </p>
+        <p>
+          A species you have barely ranked stays near the strength its categories predict, because the prior pulls b toward 0.
+          Rankings lists the full strength s for every species. A positive weight means species with that column on have been winning your duels.
+        </p>
+      </div>
+      <dl class="facts" id="model-facts"></dl>
+      <div class="traits" id="model-categories"></div>
     </section>
     <p class="empty" id="no-duel" hidden>The dex needs at least two species before a duel can start.</p>
   </div>

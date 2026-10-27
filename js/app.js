@@ -31,6 +31,9 @@
     noticeText: document.getElementById("notice-text"),
     duel: document.getElementById("duel"),
     board: document.getElementById("board"),
+    model: document.getElementById("model"),
+    modelFacts: document.getElementById("model-facts"),
+    modelCategories: document.getElementById("model-categories"),
     noDuel: document.getElementById("no-duel"),
     live: document.getElementById("versus-live"),
     stage: document.getElementById("stage"),
@@ -49,6 +52,7 @@
     modal: document.getElementById("modal"),
     viewDuel: document.getElementById("view-duel"),
     viewBoard: document.getElementById("view-board"),
+    viewModel: document.getElementById("view-model"),
   };
 
   function typeColor(type) {
@@ -150,6 +154,30 @@
     return '<img src="' + esc(src) + '" alt="" class="' + (pixel ? "pixel" : "") + '" draggable="false">';
   }
 
+  function spriteScale(count) {
+    if (count <= 1) return 0.9;
+    if (count === 2) return 0.62;
+    if (count === 3) return 0.5;
+    if (count === 4) return 0.46;
+    if (count <= 8) return 0.36;
+    if (count <= 20) return 0.24;
+    return 0.16;
+  }
+
+  function clusterPositions(count) {
+    if (count <= 1) return [{ x: 50, y: 50 }];
+    if (count === 2) return [{ x: 34, y: 50 }, { x: 66, y: 50 }];
+    if (count === 3) return [{ x: 50, y: 30 }, { x: 28, y: 72 }, { x: 72, y: 72 }];
+    if (count === 4) return [{ x: 50, y: 26 }, { x: 74, y: 50 }, { x: 50, y: 74 }, { x: 26, y: 50 }];
+    var radius = count > 12 ? 34 : 28;
+    var spots = [];
+    for (var i = 0; i < count; i++) {
+      var angle = -Math.PI / 2 + (i / count) * Math.PI * 2;
+      spots.push({ x: 50 + Math.cos(angle) * radius, y: 50 + Math.sin(angle) * radius });
+    }
+    return spots;
+  }
+
   function cardHtml(mon, side) {
     var forms = formsOf(mon);
     var many = forms.length > 1;
@@ -159,27 +187,27 @@
     var head = '<p class="dex-no">#' + String(mon.id).padStart(4, "0") + "</p>" +
       "<h2>" + esc(mon.name) + "</h2>" +
       '<p class="meta">' + metaLine(mon) + "</p>";
-    if (!many) {
-      var only = forms[0];
-      var formName = only.name !== mon.name ? '<p class="form-name">' + esc(only.name) + "</p>" : "";
-      return '<article class="card ' + side + '">' +
-        '<button type="button" class="pick" data-testid="' + testId + '" data-side="' + side +
-        '" aria-label="' + esc(aria) + '">' +
-        '<div class="portrait">' + portraitHtml(only.art || mon.art, only.pixel, mon.name) + "</div>" +
-        head + formName +
-        '<div class="types">' + typeChips(only.types) + "</div>" +
-        '<span class="hint">Pick ' + hint + "</span></button></article>";
-    }
-    var tiles = forms.map(function (entry) {
-      return '<li class="form-tile">' +
-        '<div class="tile-art">' + portraitHtml(entry.art, entry.pixel, entry.name) + "</div>" +
-        '<span class="form-tile-name">' + esc(entry.name) + "</span>" +
-        '<span class="types">' + typeChips(entry.types) + "</span></li>";
+    var spots = clusterPositions(forms.length);
+    var scale = spriteScale(forms.length);
+    var lead = 0;
+    forms.forEach(function (entry, index) {
+      if (entry.kind === "default") lead = index;
+    });
+    var sprites = forms.map(function (entry, index) {
+      var spot = spots[index];
+      var label = forms.length > 1 && forms.length <= 6
+        ? '<span class="sprite-name">' + esc(entry.name) + "</span>"
+        : "";
+      return '<span class="sprite" style="left:' + spot.x.toFixed(2) + "%;top:" + spot.y.toFixed(2) +
+        "%;--sprite:" + scale + ";z-index:" + (index === lead ? forms.length + 1 : index + 1) +
+        '" title="' + esc(entry.name) + '">' +
+        portraitHtml(entry.art || mon.art, entry.pixel, entry.name) + label + "</span>";
     }).join("");
-    return '<article class="card ' + side + ' has-forms">' +
-      '<ol class="forms" aria-label="' + esc(mon.name) + ' forms">' + tiles + "</ol>" +
+    var layout = forms.length <= 1 ? "single" : forms.length === 2 ? "pair" : forms.length === 3 ? "triangle" : forms.length === 4 ? "diamond" : "circle";
+    return '<article class="card ' + side + '">' +
       '<button type="button" class="pick" data-testid="' + testId + '" data-side="' + side +
       '" aria-label="' + esc(aria) + '">' +
+      '<div class="portrait" data-forms="' + forms.length + '" data-layout="' + layout + '">' + sprites + "</div>" +
       head +
       '<div class="types">' + typeChips(mon.types) + "</div>" +
       '<span class="hint">Pick ' + hint + "</span></button></article>";
@@ -265,17 +293,76 @@
     els.filterEmpty.hidden = rows.length !== 0;
   }
 
+  function traitLabel(categoryId, key) {
+    var value = key.indexOf(":") === -1 ? key : key.slice(key.indexOf(":") + 1);
+    if (categoryId === "generation") return generationLabel(Number(value));
+    if (categoryId === "stage") return "Stage " + value;
+    if (value === "water1") return "Water 1";
+    if (value === "water2") return "Water 2";
+    if (value === "humanshape") return "Human-like";
+    if (value === "no-eggs") return "No eggs";
+    return value.split("-").map(function (part) {
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    }).join(" ");
+  }
+
+  function renderModel() {
+    var model = state().model;
+    var peak = 0.5;
+    model.categories.forEach(function (category) {
+      category.weights.forEach(function (row) {
+        peak = Math.max(peak, Math.abs(row.weight));
+      });
+    });
+    function fact(term, value) {
+      return "<div><dt>" + esc(term) + "</dt><dd>" + value + "</dd></div>";
+    }
+    els.modelFacts.innerHTML =
+      fact("Family", esc(model.family)) +
+      fact("Strength", "<code>" + esc(model.strength) + "</code>") +
+      fact("Decisive win", "logistic of <code>" + esc(model.probability) + "</code>") +
+      fact("Weight prior", "normal, sd " + model.sigmaW.toFixed(2)) +
+      fact("Offset prior", "normal, sd " + model.sigmaB.toFixed(2) + ", one per species") +
+      fact("Answers in the fit", model.comparisons.toLocaleString() + " (skips left out)") +
+      fact("Newton steps", String(model.iterations) + (model.converged ? ", converged" : ", still moving")) +
+      fact("Columns in x", model.columns.toLocaleString());
+    els.modelCategories.innerHTML = model.categories.map(function (category) {
+      var rows = category.weights.length === 0
+        ? '<p class="trait-empty">Nothing in this dex turns this category on.</p>'
+        : "<ol>" + category.weights.map(function (row) {
+          var tone = row.weight > 0.0005 ? "up" : row.weight < -0.0005 ? "down" : "flat";
+          var share = tone === "flat" ? 0 : Math.min(50, (Math.abs(row.weight) / peak) * 50);
+          var edge = row.weight >= 0 ? "left:50%" : "right:50%";
+          return "<li>" +
+            '<span class="trait-name">' + esc(traitLabel(category.id, row.key)) + "</span>" +
+            '<span class="track" title="' + esc(formatScore(row.weight) + " " + formatSd(row.sd)) + '">' +
+            '<i class="' + tone + '" style="' + edge + ";width:" + share.toFixed(2) + '%"></i></span>' +
+            '<span class="trait-num ' + tone + '">' + formatScore(row.weight) + "</span>" +
+            '<span class="trait-sd">' + formatSd(row.sd) + "</span></li>";
+        }).join("") + "</ol>";
+      return '<section class="trait" data-category="' + esc(category.id) + '">' +
+        "<h3>" + esc(category.label) + ' <span class="encoding">' + esc(category.encoding) + "</span></h3>" +
+        "<p>" + esc(category.detail) + "</p>" +
+        '<p class="trait-count">' + category.weights.length +
+        (category.weights.length === 1 ? " column" : " columns") + "</p>" +
+        rows + "</section>";
+    }).join("");
+  }
+
   function render() {
     renderHeader();
     var pair = sides();
     var showDuel = view === "duel" && pair.left && pair.right;
     els.duel.hidden = !showDuel;
     els.board.hidden = view !== "board";
+    els.model.hidden = view !== "model";
     els.noDuel.hidden = view !== "duel" || Boolean(pair.left && pair.right);
     els.viewDuel.className = view === "duel" ? "on" : "";
     els.viewBoard.className = view === "board" ? "on" : "";
+    els.viewModel.className = view === "model" ? "on" : "";
     if (showDuel) renderDuel();
     if (view === "board") renderBoard();
+    if (view === "model") renderModel();
   }
 
   function votePhrase(mon) {
@@ -293,7 +380,6 @@
   }
 
   function onCardClick(event, side) {
-    if (event.target.closest(".forms")) return;
     if (!event.target.closest(".pick")) return;
     if (swiped) {
       swiped = false;
@@ -326,6 +412,10 @@
   });
   document.getElementById("view-board").addEventListener("click", function () {
     view = "board";
+    render();
+  });
+  document.getElementById("view-model").addEventListener("click", function () {
+    view = "model";
     render();
   });
   document.getElementById("tie").addEventListener("click", function () { vote("tie"); });
@@ -412,7 +502,6 @@
 
   els.stage.addEventListener("pointerdown", function (event) {
     if (event.button !== 0 && event.pointerType === "mouse") return;
-    if (event.target.closest(".forms")) return;
     var pick = event.target.closest(".pick");
     var side = null;
     if (pick && els.cardA.contains(pick)) side = "a";

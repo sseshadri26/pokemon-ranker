@@ -2,7 +2,8 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { createRanker, STORAGE_KEY } = require("../js/ranker.js");
+const { createRanker, STORAGE_KEY, MODEL_CATEGORIES } = require("../js/ranker.js");
+const F = require("../js/model.js");
 
 function mon(id, name, type) {
   return {
@@ -73,6 +74,58 @@ describe("ranker session", () => {
     assert.equal(second.getState().summary.matchups, 0);
     assert.equal(store.raw, "[]");
   });
+
+  it("lists every trait category and the weight learned for each column", () => {
+    const store = memory();
+    const ranker = createRanker(
+      [mon(1, "A", "fire"), mon(2, "B", "water"), mon(3, "C", "grass")],
+      { storage: store, explore: 0, rng: () => 0.5, now: () => 1 },
+    );
+    const model = ranker.getState().model;
+    assert.equal(model.family, "Hierarchical Bradley–Terry");
+    assert.equal(model.strength, "s = x·w + b");
+    assert.equal(model.sigmaW, 0.7);
+    assert.equal(model.sigmaB, 1);
+    assert.equal(model.comparisons, 0);
+    assert.equal(model.converged, true);
+    assert.deepEqual(
+      model.categories.map((category) => category.id),
+      F.extendedExtractors.map((extractor) => extractor.id),
+    );
+    assert.deepEqual(
+      model.categories.map((category) => category.id),
+      MODEL_CATEGORIES.map((category) => category.id),
+    );
+    const listed = model.categories.reduce((sum, category) => sum + category.weights.length, 0);
+    assert.equal(listed, model.columns);
+    const type = model.categories.find((category) => category.id === "type");
+    assert.deepEqual(
+      type.weights.map((row) => row.key).sort(),
+      ["type:fire", "type:grass", "type:water"],
+    );
+    assert.ok(type.weights.every((row) => Number.isFinite(row.weight) && Number.isFinite(row.sd)));
+    assert.equal(model.categories.find((category) => category.id === "legendary").weights.length, 0);
+  });
+
+  it("moves the type weight when one type keeps winning", () => {
+    const roster = [
+      ...Array.from({ length: 6 }, (_, i) => mon(i + 1, "F" + i, "fire")),
+      ...Array.from({ length: 6 }, (_, i) => mon(i + 7, "W" + i, "water")),
+    ];
+    const history = [];
+    for (let k = 0; k < 24; k++) {
+      history.push({ a: (k % 6) + 1, b: (k % 6) + 7, outcome: "a", at: k + 1 });
+    }
+    const store = memory();
+    store.raw = JSON.stringify(history);
+    const ranker = createRanker(roster, { storage: store, explore: 0, rng: () => 0.5 });
+    const type = ranker.getState().model.categories.find((category) => category.id === "type");
+    const fire = type.weights.find((row) => row.key === "type:fire");
+    const water = type.weights.find((row) => row.key === "type:water");
+    assert.ok(fire.weight > water.weight + 0.15);
+    assert.equal(ranker.getState().model.comparisons, 24);
+    assert.ok(fire.sd < 0.7);
+  });
 });
 
 describe("page files", () => {
@@ -81,6 +134,9 @@ describe("page files", () => {
     assert.match(html, /src="data\/pokedex\.js"/);
     assert.match(html, /src="js\/model\.js"/);
     assert.match(html, /src="js\/app\.js"/);
+    assert.match(html, /id="view-model"/);
+    assert.match(html, /id="model"/);
+    assert.match(html, /Hierarchical Bradley–Terry/);
     assert.match(html, /href="favicon\.svg"/);
     assert.equal(html.includes("/src/"), false);
     assert.equal(html.includes("type=\"module\""), false);
