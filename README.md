@@ -4,7 +4,7 @@ Rank the National Dex by how much **you** like each Pokémon. Favordex shows two
 
 The ranked unit is the **base species** (National Dex #1 through the latest in PokéAPI, 1,025 as of this bundle). Every alternate form — Mega, Gigantamax, regional, and the rest — is drawn on that species' card. One vote covers all of them. They are not separate ranked entries.
 
-The **Pokédex** menu changes the device, not just the colors: the red Kanto unit, the Johto flip pad, the white Hoenn dex, the Sinnoh book, the Unova slab, the Kalos hex frame, the Alola Rotom, the Galar phone, and the Paldea notebook. That choice is saved in this browser under `favordex.dex.v1`.
+The **Pokédex** menu changes the device, not just the colors: the red Kanto unit, the Johto flip pad, the orange Omega Ruby / Alpha Sapphire handheld, the Sinnoh book, the Unova slab, the Kalos hex frame, the red Alola Rotom Dex, the Galar Rotom Phone on its side, and the Paldea notebook. That choice is saved in this browser under `favordex.dex.v1`.
 
 ## Run it
 
