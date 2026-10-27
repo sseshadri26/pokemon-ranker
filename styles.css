@@ -675,14 +675,16 @@ html[data-dex="2"] .dpad, html[data-dex="2"] .speaker, html[data-dex="2"] .pad, 
 html[data-dex="2"] .keypad { display: grid; margin: 0 auto; }
 html[data-dex="2"] .controls { justify-content: center; background: #eceff3; margin: 10px 8px 0; border-radius: 12px; border: 2px solid #b9bdc4; }
 
-/* Hoenn: white body, red cap, wide blue screen, one round button. */
+/* Hoenn: ORAS handheld. Official art (archives ORAS Pokédex.png) is a wide orange
+   Game Boy Advance-style unit: black side grips, shoulder tabs, a black screen
+   bezel, a Poké Ball on the left, and two light-green buttons over a speaker. */
 html[data-dex="3"] {
   color-scheme: light;
-  --desk: #102033;
-  --bezel: #f7f9fc;
-  --bezel-deep: #d10f2a;
-  --bezel-ink: #102033;
-  --bg: #e7f3ff;
+  --desk: #1a100c;
+  --bezel: #f08a22;
+  --bezel-deep: #9a3e08;
+  --bezel-ink: #2a1408;
+  --bg: #d7ebfb;
   --ink: #102033;
   --muted: #3d5670;
   --card: #ffffff;
@@ -695,31 +697,127 @@ html[data-dex="3"] {
   --field: #ffffff;
   --field-ink: #102033;
   --glow: #4aa3e8;
-  --button: #e11d2e;
-  --screen-bezel: #d6e4f2;
+  --button: #7dce4a;
+  --screen-bezel: #141414;
   --serif: "Segoe UI", sans-serif;
   --sans: "Segoe UI", sans-serif;
 }
 html[data-dex="3"] .device {
-  background: #f7f9fc;
-  border: 0;
-  border-radius: 28px;
-  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.28), inset 0 0 0 3px #e6ebf1;
-  padding-top: 0;
+  position: relative;
+  width: min(1180px, calc(100% - 20px));
+  margin-top: 22px;
+  padding: 16px 118px 16px 156px;
+  background:
+    linear-gradient(#1a1a1a, #1a1a1a) left / 18px 100% no-repeat,
+    linear-gradient(#1a1a1a, #1a1a1a) right / 18px 100% no-repeat,
+    linear-gradient(180deg, #ffb15a 0 14px, #f08a22 14px 70%, #d86512);
+  border: 4px solid #9a3e08;
+  border-radius: 26px 26px 20px 20px;
+  box-shadow:
+    46px 14px 0 -6px #6e6e72,
+    -46px 14px 0 -6px #6e6e72,
+    0 22px 40px rgba(0, 0, 0, 0.35);
 }
+html[data-dex="3"] .device::before,
+html[data-dex="3"] .device::after {
+  content: "";
+  position: absolute;
+  top: -12px;
+  width: 92px;
+  height: 16px;
+  background: linear-gradient(#ffc27a, #e07018);
+  border: 3px solid #8a3408;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+}
+html[data-dex="3"] .device::before { left: 168px; }
+html[data-dex="3"] .device::after { right: 132px; }
 html[data-dex="3"] .face {
-  background: linear-gradient(#e1062c, #b10d24);
-  color: white;
-  min-height: 28px;
-  border-radius: 28px 28px 0 0;
+  min-height: 18px;
+  justify-content: space-between;
+  padding: 0 12px 8px;
+}
+html[data-dex="3"] .antenna,
+html[data-dex="3"] .notch,
+html[data-dex="3"] .lens.second,
+html[data-dex="3"] .lamp.yellow { display: none; }
+html[data-dex="3"] .lamp.red,
+html[data-dex="3"] .lamp.green {
+  display: block;
+  background: #8ae234;
+  box-shadow: 0 0 8px #c6ff6a, 0 0 0 2px #1a1a1a;
+}
+html[data-dex="3"] .lens {
+  display: block;
+  position: absolute;
+  z-index: 2;
+  left: 28px;
+  top: 54%;
+  width: 108px;
+  height: 108px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: linear-gradient(#f7f7f7 0 46%, #161616 46% 54%, #f7f7f7 54%);
+  box-shadow: 0 0 0 8px #161616, 0 8px 0 rgba(0, 0, 0, 0.2);
+}
+html[data-dex="3"] .lens::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 32%, #eaf7ff, #49b0ef 40%, #0d5c98 74%);
+  box-shadow: 0 0 0 6px #161616;
+}
+html[data-dex="3"] .screen {
+  border-width: 12px;
+  border-color: #141414;
+  border-radius: 8px;
+  margin: 0;
+  box-shadow: inset 0 0 0 3px #3a4550, inset 0 0 0 6px #9fd4f5;
+}
+html[data-dex="3"] .dpad,
+html[data-dex="3"] .keypad,
+html[data-dex="3"] .home-bar,
+html[data-dex="3"] .pad-btn.round { display: none; }
+html[data-dex="3"] .controls {
+  position: absolute;
+  right: 28px;
+  top: 54%;
+  transform: translateY(-50%);
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  width: 72px;
+  min-height: 0;
   padding: 0;
 }
-html[data-dex="3"] .lens, html[data-dex="3"] .lamp, html[data-dex="3"] .antenna, html[data-dex="3"] .notch { display: none; }
-html[data-dex="3"] .screen { border-width: 0; border-radius: 18px; margin: 16px; box-shadow: 0 0 0 8px #d7e8f8; }
-html[data-dex="3"] .dpad, html[data-dex="3"] .speaker, html[data-dex="3"] .keypad, html[data-dex="3"] .home-bar { display: none; }
-html[data-dex="3"] .pad-btn { display: none; }
-html[data-dex="3"] .pad-btn.round { display: block; background: radial-gradient(circle at 35% 35%, #fff, #ff5a6a 40%, #c4122a); }
-html[data-dex="3"] .controls { justify-content: center; }
+html[data-dex="3"] .pad {
+  order: 1;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+html[data-dex="3"] .pad-btn {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 32%, #e8ffc4, #8ed84a 46%, #3d8c1c);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.28), 0 3px 0 #24520e;
+}
+html[data-dex="3"] .speaker {
+  order: 2;
+  display: block;
+  width: 52px;
+  height: 26px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(#2a2a2a 0 2px, transparent 2px 5px);
+  opacity: 0.8;
+}
 
 /* Sinnoh: an open book. Red top screen, blue bottom screen. */
 html[data-dex="4"] {
@@ -865,92 +963,288 @@ html[data-dex="6"] .lamp, html[data-dex="6"] .dpad, html[data-dex="6"] .speaker,
 html[data-dex="6"] .pad-btn.round { display: block; }
 html[data-dex="6"] .screen { border: 0; clip-path: polygon(3% 0, 97% 0, 100% 6%, 100% 94%, 97% 100%, 3% 100%, 0 94%, 0 6%); }
 
-/* Alola: Rotom. Orange body, two blue eyes, a bolt, the screen is the face. */
+/* Alola: the Rotom Dex. Official art (0479Rotom-Pokédex.png) is a red tablet,
+   not an orange appliance: lightning antenna, ear points, speaker dots, white
+   eyes with a blue pupil and a black mask, and lightning-bolt arms. */
 html[data-dex="7"] {
   color-scheme: light;
-  --desk: #4a1e08;
-  --bezel: #ff9a1f;
-  --bezel-deep: #e05600;
-  --bezel-ink: #3a2208;
-  --bg: #fff4d8;
-  --ink: #3a2208;
-  --muted: #8a5a28;
-  --card: #fffaf0;
-  --card-ink: #3a2208;
-  --card-muted: #8a5a28;
-  --coral: #1f6feb;
-  --moss: #ff5a1f;
-  --line: rgba(58, 34, 8, 0.16);
-  --track: rgba(58, 34, 8, 0.12);
-  --field: #fff;
-  --field-ink: #3a2208;
-  --glow: #3d8bff;
-  --button: #ffd15c;
-  --screen-bezel: #ffd56a;
+  --desk: #4a1020;
+  --bezel: #e4263a;
+  --bezel-deep: #9a1024;
+  --bezel-ink: #fff6f6;
+  --bg: #eef6ff;
+  --ink: #1c2430;
+  --muted: #5c6b7c;
+  --card: #ffffff;
+  --card-ink: #1c2430;
+  --card-muted: #5c6b7c;
+  --coral: #e4263a;
+  --moss: #2f6fe0;
+  --line: rgba(28, 36, 48, 0.14);
+  --track: rgba(28, 36, 48, 0.12);
+  --field: #ffffff;
+  --field-ink: #1c2430;
+  --glow: #7eb6ff;
+  --button: #e4263a;
+  --screen-bezel: #f7fbff;
   --serif: "Segoe UI", sans-serif;
   --sans: "Segoe UI", sans-serif;
 }
 html[data-dex="7"] .device {
-  width: min(1080px, calc(100% - 20px));
-  background: radial-gradient(circle at 50% 0, #ffe08a, #ff9a1f 36%, #f06a00);
+  position: relative;
+  width: min(1040px, calc(100% - 170px));
+  margin-top: 48px;
+  padding: 78px 18px 8px;
+  overflow: visible;
+  background: linear-gradient(180deg, #ff5a68 0 18%, #e4263a 18% 78%, #c4122c);
   border: 0;
-  border-radius: 80px 80px 64px 64px;
-  padding: 18px 22px 20px;
-  box-shadow: 14px 18px 0 #c2410c, -14px 18px 0 #c2410c, 0 28px 40px rgba(0, 0, 0, 0.3);
+  border-radius: 28px 28px 36px 36px;
+  box-shadow: 0 22px 40px rgba(0, 0, 0, 0.32);
 }
-html[data-dex="7"] .lamp, html[data-dex="7"] .dpad, html[data-dex="7"] .speaker, html[data-dex="7"] .keypad, html[data-dex="7"] .home-bar, html[data-dex="7"] .pad { display: none; }
-html[data-dex="7"] .antenna, html[data-dex="7"] .lens.second { display: block; }
-html[data-dex="7"] .face { justify-content: center; gap: 28px; }
-html[data-dex="7"] .lens, html[data-dex="7"] .lens.second {
-  width: 54px;
-  height: 54px;
-  background: radial-gradient(circle at 35% 35%, #fff 0 12%, #5aa6ff 28%, #1248b0 70%);
-  box-shadow: 0 0 0 6px #3a2208;
+html[data-dex="7"] .device::before,
+html[data-dex="7"] .device::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  width: 84px;
+  height: 96px;
+  background: #e4263a;
+  filter: drop-shadow(0 6px 0 rgba(90, 8, 18, 0.35));
 }
-html[data-dex="7"] .screen { border-width: 8px; border-color: #ffe7a3; border-radius: 36px; }
+html[data-dex="7"] .device::before {
+  left: -70px;
+  top: 42%;
+  background:
+    radial-gradient(ellipse at 28% 78%, #ffb3ba 0 7px, #c4122c 8px 11px, transparent 12px),
+    #e4263a;
+  clip-path: polygon(100% 10%, 58% 0, 46% 30%, 12% 16%, 0 48%, 24% 64%, 6% 100%, 52% 84%, 68% 56%, 100% 42%);
+}
+html[data-dex="7"] .device::after {
+  right: -70px;
+  top: 34%;
+  background:
+    radial-gradient(ellipse at 72% 74%, #ffb3ba 0 7px, #c4122c 8px 11px, transparent 12px),
+    #e4263a;
+  clip-path: polygon(0 14%, 42% 0, 54% 28%, 88% 14%, 100% 46%, 76% 62%, 94% 100%, 48% 82%, 32% 54%, 0 40%);
+}
+html[data-dex="7"] .antenna {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: -40px;
+  width: 36px;
+  height: 48px;
+  transform: translateX(-50%);
+  background: #e4263a;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(0 3px 0 #9a1024);
+}
+html[data-dex="7"] .notch,
+html[data-dex="7"] .dpad,
+html[data-dex="7"] .speaker,
+html[data-dex="7"] .keypad,
+html[data-dex="7"] .home-bar,
+html[data-dex="7"] .pad-btn.round,
+html[data-dex="7"] .lamp.green { display: none; }
+html[data-dex="7"] .face {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  min-height: 64px;
+  justify-content: center;
+  gap: 18px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 78%, #1a1a1a 2.5px, transparent 3px),
+    radial-gradient(circle at 24% 78%, #1a1a1a 2.5px, transparent 3px),
+    radial-gradient(circle at 76% 78%, #1a1a1a 2.5px, transparent 3px),
+    radial-gradient(circle at 82% 78%, #1a1a1a 2.5px, transparent 3px);
+}
+html[data-dex="7"] .face::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 26px;
+  width: 58px;
+  height: 26px;
+  transform: translateX(-50%);
+  background: #141414;
+  border-radius: 0 0 30px 30px;
+}
+html[data-dex="7"] .lamp.red,
+html[data-dex="7"] .lamp.yellow {
+  display: block;
+  position: absolute;
+  top: -14px;
+  width: 28px;
+  height: 26px;
+  background: #e4263a;
+  border-radius: 0;
+  box-shadow: none;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+html[data-dex="7"] .lamp.red { left: 22px; }
+html[data-dex="7"] .lamp.yellow { right: 22px; background: #e4263a; }
+html[data-dex="7"] .lens.second { display: block; }
+html[data-dex="7"] .lens,
+html[data-dex="7"] .lens.second {
+  position: relative;
+  z-index: 1;
+  width: 48px;
+  height: 62px;
+  border-radius: 50%;
+  background:
+    linear-gradient(#1a1a1a, #1a1a1a) center / 78% 4px no-repeat,
+    radial-gradient(circle at 50% 46%, #fff 0 10%, #3d7dff 22%, #123a9a 58%, #fff 59%);
+  box-shadow: 0 0 0 4px #fff, 0 0 0 6px #1a1a1a;
+}
+html[data-dex="7"] .screen {
+  border-width: 10px;
+  border-color: #f7fbff;
+  border-radius: 18px;
+  box-shadow: 0 0 0 4px #9a1024, inset 0 0 0 8px rgba(126, 182, 255, 0.35);
+}
+html[data-dex="7"] .controls {
+  min-height: 0;
+  justify-content: center;
+  padding: 8px 0 2px;
+}
+html[data-dex="7"] .pad {
+  width: 160px;
+  justify-content: space-between;
+  margin: 0;
+}
+html[data-dex="7"] .pad-btn {
+  display: block;
+  width: 26px;
+  height: 16px;
+  border-radius: 50%;
+  background: #b01028;
+  box-shadow: 0 3px 0 #6e0a16;
+}
 
-/* Galar: a phone. Notch with eyes, one column, a home bar. */
+/* Galar: Rotom Phone held horizontal. Sword/Shield concept art puts the bolt
+   on the upper left, the spike on the lower right, the face upright on the
+   bezel, and a single blue camera on the opposite corner. Wide enough for
+   the duel cards to sit side by side. */
 html[data-dex="8"] {
   color-scheme: light;
-  --desk: #14080c;
-  --bezel: #111;
-  --bezel-deep: #000;
-  --bezel-ink: #fff;
-  --bg: #f4f4f6;
+  --desk: #2a1014;
+  --bezel: #f15c42;
+  --bezel-deep: #9a241c;
+  --bezel-ink: #fff6f2;
+  --bg: #f6f3f1;
   --ink: #1a1a1a;
-  --muted: #5c5c5c;
+  --muted: #5c534e;
   --card: #ffffff;
   --card-ink: #1a1a1a;
-  --card-muted: #5c5c5c;
-  --coral: #e10600;
+  --card-muted: #5c534e;
+  --coral: #e23b2a;
   --moss: #1a1a1a;
   --line: rgba(0, 0, 0, 0.12);
   --track: rgba(0, 0, 0, 0.1);
   --field: #fff;
   --field-ink: #1a1a1a;
-  --glow: #ffd000;
-  --button: #e10600;
-  --screen-bezel: transparent;
+  --glow: #8ee4f2;
+  --button: #e23b2a;
+  --screen-bezel: #6d120e;
   --serif: "Segoe UI", sans-serif;
   --sans: "Segoe UI", sans-serif;
 }
 html[data-dex="8"] .device {
-  width: min(460px, calc(100% - 16px));
-  background: #111;
-  border-radius: 36px;
-  border: 3px solid #2a2a2a;
-  padding: 10px 8px 14px;
+  position: relative;
+  width: min(1180px, calc(100% - 20px));
+  margin-top: 48px;
+  margin-bottom: 36px;
+  padding: 8px 16px 16px;
+  overflow: visible;
+  background: linear-gradient(180deg, #ff7a62, #f15c42 28%, #e23b2a 70%, #c42a22);
+  border: 3px solid #9a241c;
+  border-radius: 42px;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), 0 22px 40px rgba(0, 0, 0, 0.35);
 }
-html[data-dex="8"] .lens, html[data-dex="8"] .lamp, html[data-dex="8"] .antenna, html[data-dex="8"] .dpad,
-html[data-dex="8"] .speaker, html[data-dex="8"] .keypad, html[data-dex="8"] .pad { display: none; }
-html[data-dex="8"] .notch, html[data-dex="8"] .home-bar { display: block; }
-html[data-dex="8"] .face { justify-content: center; min-height: 0; padding: 0; }
-html[data-dex="8"] .screen { border: 0; border-radius: 22px; box-shadow: none; }
-html[data-dex="8"] .controls { min-height: 0; justify-content: center; padding-top: 8px; }
-html[data-dex="8"] header, html[data-dex="8"] .stage { grid-template-columns: 1fr; }
-html[data-dex="8"] .versus { flex-direction: row; flex-wrap: wrap; }
-html[data-dex="8"] .ghost, html[data-dex="8"] .texty { width: auto; }
-html[data-dex="8"] h1 { font-size: 2.2rem; }
+html[data-dex="8"] .device::after {
+  content: "";
+  position: absolute;
+  right: 54px;
+  bottom: -24px;
+  width: 28px;
+  height: 30px;
+  background: linear-gradient(#e23b2a, #c42a22);
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+  filter: drop-shadow(0 3px 0 #6d120e);
+}
+html[data-dex="8"] .antenna {
+  display: block;
+  position: absolute;
+  left: 28px;
+  top: -42px;
+  width: 46px;
+  height: 58px;
+  background: linear-gradient(#ff8b74, #e23b2a);
+  clip-path: polygon(38% 0, 82% 0, 50% 40%, 96% 40%, 20% 100%, 42% 54%, 4% 54%);
+  filter: drop-shadow(2px 3px 0 #6d120e);
+}
+html[data-dex="8"] .notch,
+html[data-dex="8"] .dpad,
+html[data-dex="8"] .speaker,
+html[data-dex="8"] .keypad,
+html[data-dex="8"] .pad,
+html[data-dex="8"] .home-bar,
+html[data-dex="8"] .lamp.red,
+html[data-dex="8"] .lamp.yellow,
+html[data-dex="8"] .controls { display: none; }
+html[data-dex="8"] .face {
+  display: grid;
+  grid-template-columns: 28px 28px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  min-height: 54px;
+  padding: 2px 12px 8px 84px;
+}
+html[data-dex="8"] .lens,
+html[data-dex="8"] .lens.second {
+  display: block;
+  width: 28px;
+  height: 38px;
+  border-radius: 50%;
+  background:
+    linear-gradient(#fff, #fff) center / 62% 3px no-repeat,
+    radial-gradient(circle at 50% 42%, #f4fdff 0 8%, #8ee4f2 20%, #2aa8c8 72%);
+  box-shadow: 0 0 0 3px #fff, 0 0 0 5px #1a1a1a;
+}
+html[data-dex="8"] .lens { grid-column: 1; grid-row: 1; }
+html[data-dex="8"] .lens.second { display: block; grid-column: 2; grid-row: 1; }
+html[data-dex="8"] .lamp.green {
+  display: block;
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  width: 18px;
+  height: 18px;
+  background: radial-gradient(circle at 35% 35%, #e7f6ff, #3b86db 45%, #123a6e);
+  box-shadow: 0 0 0 3px #9a241c, inset 0 0 0 2px #d7ecff;
+}
+html[data-dex="8"] .face::after {
+  content: "";
+  grid-column: 1 / 3;
+  grid-row: 2;
+  justify-self: center;
+  width: 36px;
+  height: 10px;
+  background:
+    radial-gradient(circle at 16% 20%, #fff 3px, transparent 4px),
+    radial-gradient(circle at 50% 20%, #fff 3px, transparent 4px),
+    radial-gradient(circle at 84% 20%, #fff 3px, transparent 4px);
+}
+html[data-dex="8"] .screen {
+  border: 8px solid #6d120e;
+  border-radius: 28px;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.28);
+}
 
 /* Paldea: a school notebook. Scarlet spine, violet edge, paper pages. */
 html[data-dex="9"] {
@@ -1008,6 +1302,16 @@ html[data-dex="9"] .card {
   header { grid-template-columns: 1fr; gap: 16px; }
   nav { justify-content: flex-start; }
   .lens { width: 36px; height: 36px; }
+  html[data-dex="3"] .lens { width: 72px; height: 72px; }
+  html[data-dex="3"] .device { padding-left: 96px; padding-right: 84px; }
+  html[data-dex="3"] .device::before { left: 96px; }
+  html[data-dex="7"] .lens,
+  html[data-dex="7"] .lens.second { width: 36px; height: 48px; }
+  html[data-dex="7"] .device { width: min(1040px, calc(100% - 120px)); }
+  html[data-dex="7"] .device::before { left: -48px; }
+  html[data-dex="7"] .device::after { right: -48px; }
+  html[data-dex="8"] .lens,
+  html[data-dex="8"] .lens.second { width: 22px; height: 30px; }
   .stage { grid-template-columns: 1fr; }
   .versus { flex-direction: row; flex-wrap: wrap; }
   .ghost, .texty { width: auto; }
