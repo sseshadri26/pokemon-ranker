@@ -280,48 +280,55 @@ nav button.on { background: var(--ink); color: var(--bg); border-color: var(--in
   outline: 2px solid var(--coral);
   outline-offset: 3px;
 }
-#card-a, #card-b { display: flex; min-width: 0; }
-.card { flex: 1 1 auto; width: 100%; display: flex; flex-direction: column; }
-.pick { flex: 1; display: flex; flex-direction: column; }
 .portrait {
   position: relative;
-  height: clamp(210px, 36vh, 340px);
+  width: min(100%, clamp(210px, 36vh, 340px));
+  aspect-ratio: 1;
+  margin: 0 auto;
   overflow: hidden;
+  flex: 0 0 auto;
+  border-radius: 20px;
   background:
     radial-gradient(circle at 50% 60%, rgba(255, 255, 255, 0.9), rgba(226, 214, 190, 0.35) 42%, transparent 70%);
-  border-radius: 20px;
 }
 .sprite {
   position: absolute;
   width: calc(var(--sprite) * 100%);
-  height: calc(var(--sprite) * 100%);
+  aspect-ratio: 1;
   transform: translate(-50%, -50%);
 }
 .sprite img, .sprite .monogram {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 16px 12px rgba(60, 36, 10, 0.18));
+  filter: drop-shadow(0 12px 8px rgba(60, 36, 10, 0.18));
 }
 .sprite img.pixel { image-rendering: pixelated; }
 .sprite-name {
   position: absolute;
-  left: 50%;
-  top: 100%;
-  max-width: 9.5em;
-  transform: translate(-50%, 2px);
+  left: 4%;
+  right: 4%;
+  bottom: 2%;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 84%, transparent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   line-height: 1.2;
+  text-align: center;
   color: var(--card-ink);
-  text-shadow: 0 1px 0 var(--card);
+  pointer-events: none;
 }
 .monogram {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
   font-family: var(--serif);
-  font-size: 5rem;
+  font-size: 2rem;
   font-style: italic;
 }
 .dex-no {

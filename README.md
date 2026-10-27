@@ -28,7 +28,7 @@ The scripts are ordinary JavaScript files, not modules, so the page loads from a
 | Skip | Skip | `↑` |
 | Undo the last answer | Undo | `Backspace`, `Ctrl+Z`, or `Cmd+Z` |
 
-Every form of a species shares one picture above the name. Two forms sit side by side, three form a triangle, four form a diamond, and larger sets overlap in a ring. The left and right cards stay the same size either way. A click or swipe on that picture picks the species.
+Forms overlap in one picture (a triangle for three, a diamond for four, a ring when there are more). A click or swipe on the card picks the species, every form. The left and right cards stay the same size either way.
 
 **Rankings** is the full order, with a score, a Laplace uncertainty, and how many matchups that species has been in. Filter by type or generation, or search by name. The header shows the matchup count and a confidence percentage.
 

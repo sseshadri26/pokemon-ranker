@@ -155,25 +155,28 @@
   }
 
   function spriteScale(count) {
-    if (count <= 1) return 0.9;
-    if (count === 2) return 0.62;
-    if (count === 3) return 0.5;
-    if (count === 4) return 0.46;
-    if (count <= 8) return 0.36;
-    if (count <= 20) return 0.24;
-    return 0.16;
+    if (count <= 1) return 1;
+    if (count === 2) return 0.64;
+    if (count === 3) return 0.56;
+    if (count === 4) return 0.36;
+    if (count <= 8) return 0.42;
+    if (count <= 20) return 0.28;
+    return 0.18;
   }
 
   function clusterPositions(count) {
     if (count <= 1) return [{ x: 50, y: 50 }];
-    if (count === 2) return [{ x: 34, y: 50 }, { x: 66, y: 50 }];
-    if (count === 3) return [{ x: 50, y: 30 }, { x: 28, y: 72 }, { x: 72, y: 72 }];
-    if (count === 4) return [{ x: 50, y: 26 }, { x: 74, y: 50 }, { x: 50, y: 74 }, { x: 26, y: 50 }];
-    var radius = count > 12 ? 34 : 28;
+    if (count === 2) return [{ x: 32, y: 50 }, { x: 68, y: 50 }];
+    if (count === 3) return [{ x: 50, y: 28 }, { x: 28, y: 72 }, { x: 72, y: 72 }];
+    if (count === 4) return [{ x: 50, y: 18 }, { x: 82, y: 50 }, { x: 50, y: 82 }, { x: 18, y: 50 }];
+    var radius = 49 - spriteScale(count) * 50;
     var spots = [];
     for (var i = 0; i < count; i++) {
       var angle = -Math.PI / 2 + (i / count) * Math.PI * 2;
-      spots.push({ x: 50 + Math.cos(angle) * radius, y: 50 + Math.sin(angle) * radius });
+      spots.push({
+        x: Math.round((50 + Math.cos(angle) * radius) * 10) / 10,
+        y: Math.round((50 + Math.sin(angle) * radius) * 10) / 10,
+      });
     }
     return spots;
   }
@@ -190,9 +193,12 @@
     var spots = clusterPositions(forms.length);
     var scale = spriteScale(forms.length);
     var lead = 0;
-    forms.forEach(function (entry, index) {
-      if (entry.kind === "default") lead = index;
-    });
+    for (var i = 0; i < forms.length; i++) {
+      if (forms[i].kind === "default") {
+        lead = i;
+        break;
+      }
+    }
     var sprites = forms.map(function (entry, index) {
       var spot = spots[index];
       var label = forms.length > 1 && forms.length <= 6
