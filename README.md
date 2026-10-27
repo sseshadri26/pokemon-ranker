@@ -4,7 +4,7 @@ Rank the National Dex by how much **you** like each Pokémon. Favordex shows two
 
 The ranked unit is the **base species** (National Dex #1 through the latest in PokéAPI, 1,025 as of this bundle). Every alternate form — Mega, Gigantamax, regional, and the rest — is drawn on that species' card. One vote covers all of them. They are not separate ranked entries.
 
-The **Pokédex** menu restyles the shell as the dex from any region, Kanto through Paldea. That choice is saved in this browser under `favordex.dex.v1`.
+The **Pokédex** menu changes the device, not just the colors: the red Kanto unit, the Johto flip pad, the white Hoenn dex, the Sinnoh book, the Unova slab, the Kalos hex frame, the Alola Rotom, the Galar phone, and the Paldea notebook. That choice is saved in this browser under `favordex.dex.v1`.
 
 ## Run it
 
@@ -28,7 +28,7 @@ The scripts are ordinary JavaScript files, not modules, so the page loads from a
 | Skip | Skip | `↑` |
 | Undo the last answer | Undo | `Backspace`, `Ctrl+Z`, or `Cmd+Z` |
 
-The form grid shows every look at once, with its artwork, name, and types. "One vote covers all N forms" stays on screen while that grid scrolls. Clicking or scrolling the grid does not vote. A swipe starts on the card outside that grid.
+Every form is drawn large, with the species name and Pick control underneath. Scrolling the pictures does not vote. A swipe starts on the card outside that grid.
 
 **Rankings** is the full order, with a score, a Laplace uncertainty, and how many matchups that species has been in. Filter by type or generation, or search by name. The header shows the matchup count and a confidence percentage.
 

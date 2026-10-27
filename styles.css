@@ -42,68 +42,109 @@ body {
 .device {
   width: min(1240px, calc(100% - 20px));
   margin: 16px auto 28px;
-  padding: 14px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bezel) 82%, white), var(--bezel) 38%, var(--bezel-deep));
+  padding: 18px 16px 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bezel) 78%, white), var(--bezel) 42%, var(--bezel-deep));
   color: var(--bezel-ink);
-  border: 3px solid var(--bezel-deep);
+  border: 4px solid var(--bezel-deep);
   border-radius: var(--device-radius);
   box-shadow: inset 0 2px 0 var(--bezel-shine), 0 28px 50px rgba(0, 0, 0, 0.38);
 }
-.hinge, .pad {
+.face, .controls, .pad {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
+  gap: 12px;
 }
-.hinge { min-height: 64px; }
-.pad { justify-content: flex-end; padding-top: 12px; }
+.face { min-height: 78px; padding: 0 8px 10px; }
+.controls { min-height: 86px; padding: 12px 8px 4px; justify-content: space-between; }
 .lens {
-  width: 52px;
-  height: 52px;
+  width: 72px;
+  height: 72px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: radial-gradient(circle at 32% 32%, #fff 0 8%, var(--glow) 28%, #16324f 70%);
-  box-shadow: inset 0 0 0 6px var(--bezel-deep), 0 6px 0 rgba(0, 0, 0, 0.18);
+  background: radial-gradient(circle at 32% 30%, #fff 0 7%, #9fd8ff 18%, #1d4e89 46%, #071426 74%);
+  box-shadow: inset 0 0 0 7px #c5d0dc, 0 0 0 4px #1a1a1a, 0 8px 0 rgba(0, 0, 0, 0.18);
 }
-.lens.second { display: none; }
+.lens.second, .antenna, .notch, .keypad, .home-bar { display: none; }
 .lamp {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.28), 0 0 0 3px #1a1a1a;
 }
-.lamp.red { background: #ff4d4d; }
-.lamp.yellow { background: #ffd24a; }
-.lamp.green { background: #3ddc78; }
-.model-name {
-  margin: 0 0 0 auto;
-  font-family: var(--serif);
-  font-style: italic;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  font-size: 1.35rem;
+.lamp.red { background: #ff3b30; }
+.lamp.yellow { background: #ffd60a; }
+.lamp.green { background: #30d158; }
+.antenna {
+  width: 18px;
+  height: 42px;
+  background: linear-gradient(#ffe08a, #f5a623);
+  clip-path: polygon(40% 0, 60% 0, 80% 100%, 20% 100%);
 }
-.model-name::before { content: "Kanto"; }
+.notch {
+  width: 118px;
+  height: 28px;
+  margin: 0 auto;
+  border-radius: 0 0 16px 16px;
+  background: #111;
+  box-shadow: inset 18px 8px 0 3px #f4f7ff, inset 78px 8px 0 3px #f4f7ff;
+}
 .screen {
   position: relative;
   background: var(--bg);
   color: var(--ink);
-  border: 4px solid var(--screen-bezel);
+  border: 8px solid var(--screen-bezel);
   border-radius: var(--screen-radius);
   overflow: hidden;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25);
 }
+.dpad {
+  width: 78px;
+  height: 78px;
+  background:
+    linear-gradient(#1c1c1c, #1c1c1c) center / 26px 78px no-repeat,
+    linear-gradient(#1c1c1c, #1c1c1c) center / 78px 26px no-repeat;
+  filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.35));
+}
+.speaker {
+  width: 86px;
+  height: 34px;
+  border-radius: 6px;
+  background: repeating-linear-gradient(#1a1a1a 0 3px, transparent 3px 7px);
+  opacity: 0.85;
+}
+.keypad {
+  display: none;
+  grid-template-columns: repeat(4, 18px);
+  gap: 8px 10px;
+}
+.keypad i {
+  display: block;
+  width: 18px;
+  height: 14px;
+  border-radius: 3px;
+  background: #d9dde3;
+  box-shadow: 0 2px 0 #8d939c;
+}
+.pad { gap: 10px; margin-left: auto; }
 .pad-btn {
-  width: 52px;
-  height: 16px;
-  border-radius: 8px;
-  background: var(--button);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45), 0 3px 0 rgba(0, 0, 0, 0.28);
+  width: 54px;
+  height: 18px;
+  border-radius: 7px;
+  background: #2a2a2a;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25), 0 3px 0 #111;
 }
 .pad-btn.round {
-  width: 44px;
-  height: 44px;
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
-  margin-top: -8px;
+  background: radial-gradient(circle at 35% 35%, #ffe58a, var(--button) 42%, #a97810);
+}
+.home-bar {
+  width: 120px;
+  height: 6px;
+  margin: 0 auto;
+  border-radius: 99px;
+  background: #f2f2f2;
 }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -259,16 +300,17 @@ h2 {
   line-height: 0.92;
 }
 .form-name { margin: 6px 0 0; color: var(--card-muted); }
-.card.has-forms h2 { font-size: clamp(1.7rem, 3vw, 2.5rem); }
-.covers {
-  margin: 12px 0 0;
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--coral) 16%, var(--card));
-  color: var(--card-ink);
-  font-weight: 750;
-  font-size: 0.98rem;
-  text-align: center;
+.card.has-forms {
+  display: flex;
+  flex-direction: column;
+  max-height: min(92vh, 980px);
+}
+.card.has-forms h2 { font-size: clamp(1.8rem, 3vw, 2.6rem); }
+.card.has-forms .pick {
+  flex: 0 0 auto;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--card-ink) 14%, transparent);
 }
 .types { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .type {
@@ -290,11 +332,13 @@ h2 {
 .hint { display: block; margin-top: 12px; color: var(--card-muted); font-size: 0.95rem; font-weight: 700; }
 .forms {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
   align-content: start;
-  max-height: min(52vh, 480px);
-  margin: 10px 0 0;
+  flex: 1 1 auto;
+  min-height: 240px;
+  max-height: min(64vh, 680px);
+  margin: 0;
   padding: 2px 4px 8px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -311,11 +355,11 @@ h2 {
   text-align: center;
 }
 .tile-art {
-  height: 118px;
+  height: 230px;
   display: grid;
   place-items: center;
 }
-.tile-art img { max-height: 112px; width: auto; object-fit: contain; }
+.tile-art img { max-height: 220px; width: auto; object-fit: contain; filter: drop-shadow(0 12px 8px rgba(60, 36, 10, 0.16)); }
 .tile-art img.pixel, .portrait img.pixel { image-rendering: pixelated; }
 .tile-art .monogram { font-size: 2.4rem; }
 .form-tile-name {
@@ -457,76 +501,136 @@ kbd {
   border: 0;
 }
 
-html[data-dex="1"] .screen::after,
-html[data-dex="2"] .screen::after {
+/* Kanto: red unit, blue lens, green CRT, black cross pad. */
+html[data-dex="1"] {
+  --sans: Consolas, "Courier New", monospace;
+  --serif: Consolas, "Courier New", monospace;
+}
+html[data-dex="1"] .device {
+  background: linear-gradient(180deg, #ff4a4a 0 18%, #d0122d 18% 78%, #8d0d18 78%);
+  border-color: #5c0810;
+  border-radius: 46px 46px 32px 32px;
+}
+html[data-dex="1"] .screen {
+  background: #8fce62;
+  border-width: 14px;
+  border-color: #141414;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 3px #3a3a3a, inset 0 0 40px rgba(40, 80, 10, 0.25);
+}
+html[data-dex="1"] .screen::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.07) 0 1px, transparent 1px 4px);
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 0 1px, transparent 1px 3px);
 }
+html[data-dex="1"] .keypad,
+html[data-dex="1"] .home-bar,
+html[data-dex="1"] .antenna,
+html[data-dex="1"] .notch,
+html[data-dex="1"] .lens.second { display: none; }
+html[data-dex="1"] .controls { background: #1a1a1a; margin: 12px -8px -6px; padding: 14px 16px; border-radius: 0 0 22px 22px; }
+html[data-dex="1"] .dpad {
+  background:
+    linear-gradient(#4a4a4a, #4a4a4a) center / 26px 78px no-repeat,
+    linear-gradient(#4a4a4a, #4a4a4a) center / 78px 26px no-repeat;
+}
+html[data-dex="1"] .speaker { background: repeating-linear-gradient(#555 0 3px, #1a1a1a 3px 7px); }
 
+/* Johto: gold lid over a silver body, tiny screen, number pad. */
 html[data-dex="2"] {
   color-scheme: light;
-  --desk: #14161b;
-  --bezel: #5c616a;
-  --bezel-deep: #2c3036;
-  --bezel-ink: #f6ecd4;
-  --bg: #8fbf6a;
-  --ink: #1a2414;
-  --muted: #314828;
-  --card: #f7f3e6;
-  --card-ink: #1c1a16;
-  --card-muted: #5c5648;
-  --coral: #8a6a22;
-  --moss: #2f6284;
-  --line: rgba(28, 26, 22, 0.16);
-  --track: rgba(28, 26, 22, 0.14);
-  --field: #fffaf0;
-  --field-ink: #1c1a16;
+  --desk: #101114;
+  --bezel: #c6a15a;
+  --bezel-deep: #6e5a2e;
+  --bezel-ink: #2a2418;
+  --bg: #d7efe4;
+  --ink: #1c2420;
+  --muted: #3e534c;
+  --card: #f4fff8;
+  --card-ink: #1c2420;
+  --card-muted: #4d635c;
+  --coral: #8a6230;
+  --moss: #2c6b62;
+  --line: rgba(28, 36, 32, 0.16);
+  --track: rgba(28, 36, 32, 0.12);
+  --field: #fff;
+  --field-ink: #1c2420;
   --glow: #e6c56a;
-  --button: #d4b15a;
-  --screen-bezel: #1c1e22;
-  --device-radius: 18px;
-  --screen-radius: 8px;
+  --button: #eee6d4;
+  --screen-bezel: #8d7340;
+  --device-radius: 22px;
+  --screen-radius: 6px;
+  --serif: Georgia, "Palatino Linotype", serif;
+  --sans: "Segoe UI", sans-serif;
 }
-html[data-dex="2"] .model-name::before { content: "Johto"; }
+html[data-dex="2"] .device {
+  width: min(980px, calc(100% - 20px));
+  background: linear-gradient(#e7d7a4, #c6a15a 18%, #b9974e 18%, #8d8f96 19%, #d5d7dc 40%, #9aa0a8);
+  border-color: #5c5648;
+  border-radius: 26px 26px 18px 18px;
+}
+html[data-dex="2"] .face { display: none; }
+html[data-dex="2"] .screen { border-width: 10px; border-color: #6e5a2e; box-shadow: inset 0 0 0 4px #1c1c1c; }
+html[data-dex="2"] .dpad, html[data-dex="2"] .speaker, html[data-dex="2"] .pad, html[data-dex="2"] .home-bar { display: none; }
+html[data-dex="2"] .keypad { display: grid; margin: 0 auto; }
+html[data-dex="2"] .controls { justify-content: center; background: #eceff3; margin: 10px 8px 0; border-radius: 12px; border: 2px solid #b9bdc4; }
 
+/* Hoenn: white body, red cap, wide blue screen, one round button. */
 html[data-dex="3"] {
   color-scheme: light;
-  --desk: #0e1c30;
+  --desk: #102033;
   --bezel: #f7f9fc;
   --bezel-deep: #d10f2a;
-  --bezel-ink: #1b2430;
-  --bg: #d7ecff;
+  --bezel-ink: #102033;
+  --bg: #e7f3ff;
   --ink: #102033;
   --muted: #3d5670;
   --card: #ffffff;
   --card-ink: #102033;
   --card-muted: #4c6278;
   --coral: #e11d2e;
-  --moss: #1d4e89;
+  --moss: #1565c0;
   --line: rgba(16, 32, 51, 0.14);
   --track: rgba(16, 32, 51, 0.12);
   --field: #ffffff;
   --field-ink: #102033;
   --glow: #4aa3e8;
-  --button: #f08a24;
-  --screen-bezel: #12345a;
-  --device-radius: 28px;
-  --screen-radius: 22px;
+  --button: #e11d2e;
+  --screen-bezel: #d6e4f2;
+  --serif: "Segoe UI", sans-serif;
+  --sans: "Segoe UI", sans-serif;
 }
-html[data-dex="3"] .model-name::before { content: "Hoenn"; }
-html[data-dex="3"] .hinge { background: #d10f2a; color: #fff; border-radius: 16px; margin-bottom: 10px; }
-html[data-dex="3"] .lamp { display: none; }
+html[data-dex="3"] .device {
+  background: #f7f9fc;
+  border: 0;
+  border-radius: 28px;
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.28), inset 0 0 0 3px #e6ebf1;
+  padding-top: 0;
+}
+html[data-dex="3"] .face {
+  background: linear-gradient(#e1062c, #b10d24);
+  color: white;
+  min-height: 28px;
+  border-radius: 28px 28px 0 0;
+  padding: 0;
+}
+html[data-dex="3"] .lens, html[data-dex="3"] .lamp, html[data-dex="3"] .antenna, html[data-dex="3"] .notch { display: none; }
+html[data-dex="3"] .screen { border-width: 0; border-radius: 18px; margin: 16px; box-shadow: 0 0 0 8px #d7e8f8; }
+html[data-dex="3"] .dpad, html[data-dex="3"] .speaker, html[data-dex="3"] .keypad, html[data-dex="3"] .home-bar { display: none; }
+html[data-dex="3"] .pad-btn { display: none; }
+html[data-dex="3"] .pad-btn.round { display: block; background: radial-gradient(circle at 35% 35%, #fff, #ff5a6a 40%, #c4122a); }
+html[data-dex="3"] .controls { justify-content: center; }
 
+/* Sinnoh: an open book. Red top screen, blue bottom screen. */
 html[data-dex="4"] {
   color-scheme: light;
-  --desk: #161026;
-  --bezel: #f4f6f8;
-  --bezel-deep: #c9d0d8;
+  --desk: #1a1430;
+  --bezel: #f4f5f7;
+  --bezel-deep: #d5dbe3;
   --bezel-ink: #1c2430;
-  --bg: #eef3f8;
+  --bg: #eceff3;
   --ink: #1c2430;
   --muted: #546170;
   --card: #ffffff;
@@ -540,49 +644,92 @@ html[data-dex="4"] {
   --field-ink: #1c2430;
   --glow: #7ec8ff;
   --button: #f2f5f8;
-  --screen-bezel: #d7dee6;
-  --device-radius: 26px;
+  --screen-bezel: transparent;
+  --serif: "Segoe UI", sans-serif;
+  --sans: "Segoe UI", sans-serif;
 }
-html[data-dex="4"] .model-name::before { content: "Sinnoh"; }
-html[data-dex="4"] .hinge { background: #e23d4a; color: white; border-radius: 16px 16px 0 0; }
-html[data-dex="4"] .pad { background: #3d8fd4; border-radius: 0 0 16px 16px; color: white; }
-html[data-dex="4"] .model-name { color: white; }
+html[data-dex="4"] .device {
+  background: #f7f8fa;
+  border: 0;
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+html[data-dex="4"] .face, html[data-dex="4"] .controls { display: none; }
+html[data-dex="4"] .screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+html[data-dex="4"] .app { width: 100%; padding: 0; }
+html[data-dex="4"] header {
+  background: #1b1e26;
+  color: #f4f7fb;
+  --ink: #f4f7fb;
+  --muted: #c5d0dc;
+  --line: rgba(255, 255, 255, 0.2);
+  border: 10px solid #e23d4a;
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin: 0;
+}
+html[data-dex="4"] .duel, html[data-dex="4"] .board, html[data-dex="4"] #no-duel {
+  background: #f3f6fa;
+  color: #1c2430;
+  border: 10px solid #3d8fd4;
+  border-radius: 12px;
+  padding: 14px;
+}
+html[data-dex="4"] .notice { color: #1c2430; }
 
+/* Unova: a black glass slab. The screen is the device. */
 html[data-dex="5"] {
   color-scheme: dark;
-  --desk: #05060a;
-  --bezel: #0e1118;
-  --bezel-deep: #2a6dff;
+  --desk: #020308;
+  --bezel: #07080c;
+  --bezel-deep: #3d7eff;
   --bezel-ink: #d7e6ff;
-  --bezel-shine: rgba(90, 160, 255, 0.35);
-  --bg: #10141c;
+  --bg: #0c0e14;
   --ink: #e8f1ff;
   --muted: #8aa0c0;
-  --card: #1b2433;
+  --card: #171d2a;
   --card-ink: #e8f1ff;
   --card-muted: #9eb0c8;
-  --coral: #3d7eff;
-  --moss: #7a6bff;
+  --coral: #4c8dff;
+  --moss: #8b7cff;
   --line: rgba(232, 241, 255, 0.16);
   --track: rgba(232, 241, 255, 0.12);
   --field: #0c1018;
   --field-ink: #e8f1ff;
   --glow: #49e0ff;
   --button: #1a2744;
-  --screen-bezel: #49e0ff;
-  --device-radius: 14px;
-  --screen-radius: 6px;
+  --screen-bezel: transparent;
+  --serif: "Segoe UI", sans-serif;
+  --sans: "Segoe UI", sans-serif;
 }
-html[data-dex="5"] .model-name::before { content: "Unova"; }
+html[data-dex="5"] .device {
+  background: #05060a;
+  border: 1px solid #49e0ff;
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 0 0 1px #1a2744, 0 0 32px rgba(73, 224, 255, 0.25);
+}
+html[data-dex="5"] .face, html[data-dex="5"] .controls { display: none; }
+html[data-dex="5"] .screen { border: 0; border-radius: 6px; box-shadow: none; }
 html[data-dex="5"] .portrait {
   background: radial-gradient(circle at 50% 60%, rgba(73, 224, 255, 0.16), transparent 68%);
 }
 
+/* Kalos: white hex frame and a sky-blue pane. */
 html[data-dex="6"] {
   color-scheme: light;
-  --desk: #241433;
+  --desk: #2a1840;
   --bezel: #f7fbff;
-  --bezel-deep: #b9dff3;
+  --bezel-deep: #9fd4ee;
   --bezel-ink: #243044;
   --bg: #e7f7ff;
   --ink: #243044;
@@ -597,23 +744,37 @@ html[data-dex="6"] {
   --field: #ffffff;
   --field-ink: #243044;
   --glow: #8fd4ff;
-  --button: #f3b6d8;
-  --screen-bezel: #9fd4ee;
-  --device-radius: 32px;
+  --button: #7ec8f0;
+  --screen-bezel: transparent;
+  --serif: "Segoe UI", sans-serif;
+  --sans: "Segoe UI", sans-serif;
 }
-html[data-dex="6"] .model-name::before { content: "Kalos"; }
+html[data-dex="6"] .device {
+  background:
+    radial-gradient(circle at 18px 18px, transparent 10px, #d7eef8 11px 12px, transparent 13px) 0 0 / 36px 36px,
+    #f7fbff;
+  border: 0;
+  border-radius: 0;
+  clip-path: polygon(4% 0, 96% 0, 100% 8%, 100% 92%, 96% 100%, 4% 100%, 0 92%, 0 8%);
+  padding: 28px 22px 18px;
+}
 html[data-dex="6"] .lens {
   border-radius: 0;
   clip-path: polygon(50% 0, 96% 25%, 96% 75%, 50% 100%, 4% 75%, 4% 25%);
+  box-shadow: none;
 }
+html[data-dex="6"] .lamp, html[data-dex="6"] .dpad, html[data-dex="6"] .speaker, html[data-dex="6"] .keypad, html[data-dex="6"] .home-bar, html[data-dex="6"] .pad-btn { display: none; }
+html[data-dex="6"] .pad-btn.round { display: block; }
+html[data-dex="6"] .screen { border: 0; clip-path: polygon(3% 0, 97% 0, 100% 6%, 100% 94%, 97% 100%, 3% 100%, 0 94%, 0 6%); }
 
+/* Alola: Rotom. Orange body, two blue eyes, a bolt, the screen is the face. */
 html[data-dex="7"] {
   color-scheme: light;
-  --desk: #3a1604;
+  --desk: #4a1e08;
   --bezel: #ff9a1f;
-  --bezel-deep: #e05a00;
+  --bezel-deep: #e05600;
   --bezel-ink: #3a2208;
-  --bg: #fff6df;
+  --bg: #fff4d8;
   --ink: #3a2208;
   --muted: #8a5a28;
   --card: #fffaf0;
@@ -627,23 +788,37 @@ html[data-dex="7"] {
   --field-ink: #3a2208;
   --glow: #3d8bff;
   --button: #ffd15c;
-  --screen-bezel: #ffd15c;
-  --device-radius: 58px;
-  --screen-radius: 36px;
+  --screen-bezel: #ffd56a;
+  --serif: "Segoe UI", sans-serif;
+  --sans: "Segoe UI", sans-serif;
 }
-html[data-dex="7"] .model-name::before { content: "Alola"; }
-html[data-dex="7"] .lamp { display: none; }
-html[data-dex="7"] .lens.second { display: block; }
-html[data-dex="7"] .hinge { justify-content: center; }
-html[data-dex="7"] .model-name { margin: 0; }
+html[data-dex="7"] .device {
+  width: min(1080px, calc(100% - 20px));
+  background: radial-gradient(circle at 50% 0, #ffe08a, #ff9a1f 36%, #f06a00);
+  border: 0;
+  border-radius: 80px 80px 64px 64px;
+  padding: 18px 22px 20px;
+  box-shadow: 14px 18px 0 #c2410c, -14px 18px 0 #c2410c, 0 28px 40px rgba(0, 0, 0, 0.3);
+}
+html[data-dex="7"] .lamp, html[data-dex="7"] .dpad, html[data-dex="7"] .speaker, html[data-dex="7"] .keypad, html[data-dex="7"] .home-bar, html[data-dex="7"] .pad { display: none; }
+html[data-dex="7"] .antenna, html[data-dex="7"] .lens.second { display: block; }
+html[data-dex="7"] .face { justify-content: center; gap: 28px; }
+html[data-dex="7"] .lens, html[data-dex="7"] .lens.second {
+  width: 54px;
+  height: 54px;
+  background: radial-gradient(circle at 35% 35%, #fff 0 12%, #5aa6ff 28%, #1248b0 70%);
+  box-shadow: 0 0 0 6px #3a2208;
+}
+html[data-dex="7"] .screen { border-width: 8px; border-color: #ffe7a3; border-radius: 36px; }
 
+/* Galar: a phone. Notch with eyes, one column, a home bar. */
 html[data-dex="8"] {
   color-scheme: light;
-  --desk: #1a090c;
-  --bezel: #f7f7f7;
-  --bezel-deep: #111;
-  --bezel-ink: #1a1a1a;
-  --bg: #f4f4f4;
+  --desk: #14080c;
+  --bezel: #111;
+  --bezel-deep: #000;
+  --bezel-ink: #fff;
+  --bg: #f4f4f6;
   --ink: #1a1a1a;
   --muted: #5c5c5c;
   --card: #ffffff;
@@ -657,24 +832,39 @@ html[data-dex="8"] {
   --field-ink: #1a1a1a;
   --glow: #ffd000;
   --button: #e10600;
-  --screen-bezel: #111;
-  --device-radius: 22px;
-  --screen-radius: 4px;
+  --screen-bezel: transparent;
+  --serif: "Segoe UI", sans-serif;
+  --sans: "Segoe UI", sans-serif;
 }
-html[data-dex="8"] .model-name::before { content: "Galar"; }
-html[data-dex="8"] .hinge { background: #e10600; color: white; border-radius: 12px; }
-html[data-dex="8"] .model-name, html[data-dex="8"] .hinge { color: white; }
+html[data-dex="8"] .device {
+  width: min(460px, calc(100% - 16px));
+  background: #111;
+  border-radius: 36px;
+  border: 3px solid #2a2a2a;
+  padding: 10px 8px 14px;
+}
+html[data-dex="8"] .lens, html[data-dex="8"] .lamp, html[data-dex="8"] .antenna, html[data-dex="8"] .dpad,
+html[data-dex="8"] .speaker, html[data-dex="8"] .keypad, html[data-dex="8"] .pad { display: none; }
+html[data-dex="8"] .notch, html[data-dex="8"] .home-bar { display: block; }
+html[data-dex="8"] .face { justify-content: center; min-height: 0; padding: 0; }
+html[data-dex="8"] .screen { border: 0; border-radius: 22px; box-shadow: none; }
+html[data-dex="8"] .controls { min-height: 0; justify-content: center; padding-top: 8px; }
+html[data-dex="8"] header, html[data-dex="8"] .stage { grid-template-columns: 1fr; }
+html[data-dex="8"] .versus { flex-direction: row; flex-wrap: wrap; }
+html[data-dex="8"] .ghost, html[data-dex="8"] .texty { width: auto; }
+html[data-dex="8"] h1 { font-size: 2.2rem; }
 
+/* Paldea: a school notebook. Scarlet spine, violet edge, paper pages. */
 html[data-dex="9"] {
   color-scheme: light;
-  --desk: #1a1030;
+  --desk: #241433;
   --bezel: #f6f1e6;
   --bezel-deep: #e7dcc8;
   --bezel-ink: #241c16;
   --bg: #fffaf3;
   --ink: #241c16;
   --muted: #6d6256;
-  --card: #fff;
+  --card: transparent;
   --card-ink: #241c16;
   --card-muted: #6d6256;
   --coral: #ef3b2f;
@@ -685,17 +875,36 @@ html[data-dex="9"] {
   --field-ink: #241c16;
   --glow: #c4b5fd;
   --button: #ef3b2f;
-  --screen-bezel: #efe6d6;
-  --device-radius: 8px 28px 28px 8px;
-  --screen-radius: 4px;
+  --screen-bezel: transparent;
+  --serif: "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: "Palatino Linotype", Palatino, Georgia, serif;
 }
-html[data-dex="9"] .model-name::before { content: "Paldea"; }
 html[data-dex="9"] .device {
-  border-left: 14px solid #ef3b2f;
+  background: #f6f1e6;
+  border: 0;
+  border-radius: 6px 18px 18px 6px;
+  border-left: 22px solid #ef3b2f;
   border-right: 14px solid #6d28d9;
+  box-shadow: inset 18px 0 0 #f3c1b8, 0 22px 40px rgba(0, 0, 0, 0.28);
 }
-html[data-dex="9"] .hinge { background: linear-gradient(90deg, #ef3b2f, #6d28d9); color: white; border-radius: 4px; }
-html[data-dex="9"] .model-name { color: white; }
+html[data-dex="9"] .face, html[data-dex="9"] .controls { display: none; }
+html[data-dex="9"] .screen {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 31px, rgba(125, 90, 70, 0.14) 31px 32px),
+    #fffaf3;
+}
+html[data-dex="9"] .stage {
+  background: linear-gradient(90deg, rgba(239, 59, 47, 0.05), rgba(239, 59, 47, 0.05) 48%, rgba(109, 40, 217, 0.07) 52%, rgba(109, 40, 217, 0.07));
+  border-radius: 16px;
+  padding: 8px;
+}
+html[data-dex="9"] .card {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: none;
+}
 
 @media (max-width: 900px) {
   header { grid-template-columns: 1fr; gap: 16px; }

@@ -177,12 +177,12 @@
         '<span class="types">' + typeChips(entry.types) + "</span></li>";
     }).join("");
     return '<article class="card ' + side + ' has-forms">' +
+      '<ol class="forms" aria-label="' + esc(mon.name) + ' forms">' + tiles + "</ol>" +
       '<button type="button" class="pick" data-testid="' + testId + '" data-side="' + side +
       '" aria-label="' + esc(aria) + '">' +
       head +
-      '<span class="hint">' + esc(aria) + "</span></button>" +
-      '<p class="covers">One vote covers all ' + forms.length + " forms</p>" +
-      '<ol class="forms" aria-label="' + esc(mon.name) + ' forms">' + tiles + "</ol></article>";
+      '<div class="types">' + typeChips(mon.types) + "</div>" +
+      '<span class="hint">Pick ' + hint + "</span></button></article>";
   }
 
   function renderHeader() {
