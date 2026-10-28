@@ -123,11 +123,11 @@
       <div class="sheet-lead">
         <p class="eyebrow">Prediction model</p>
         <h2>Hierarchical Bradley–Terry</h2>
-        <p class="formula">s = x · w + b</p>
+        <p class="formula">s = x · w + v · tanh(Uz + c) + b</p>
         <p>
           Each species has a strength s. In a decisive duel the chance the left species wins is the logistic of
-          s<sub>left</sub> − s<sub>right</sub>. The row x is that species' categories, listed below.
-          The vector w is what this tab learns from your picks. The offset b belongs to that species alone.
+          s<sub>left</sub> − s<sub>right</sub>. The row x is the category list below, and w is its linear weights.
+          z is the battle stats, base stat total, height, weight, and catch rate. Four hidden units pass Uz + c through tanh, and v mixes those units into the strength. The offset b belongs to that species alone.
         </p>
         <p>
           A tie counts as a half-win each way and enters the fit. A skip stays in the history so it can be undone, and it stays out of the fit.

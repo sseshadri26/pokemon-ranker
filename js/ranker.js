@@ -87,6 +87,41 @@
       encoding: "flag",
       detail: "On when the species is from a starter line.",
     },
+    {
+      id: "stats",
+      label: "Battle stats",
+      prefix: "stat:",
+      encoding: "scaled",
+      detail: "One column each for HP, Attack, Defense, Sp. Atk, Sp. Def, and Speed. Each is centered and scaled so a typical stat is near 0 and a big shift is about 1.",
+    },
+    {
+      id: "body",
+      label: "Body",
+      prefix: "size:",
+      encoding: "scaled",
+      detail: "Height in meters, centered at 1 m. Weight is log kilograms, centered near 25 kg. Bigger numbers are larger Pokémon.",
+    },
+    {
+      id: "ecology",
+      label: "Catch and care",
+      prefix: "eco:",
+      encoding: "scaled",
+      detail: "Catch rate, base happiness, and egg cycles. A higher catch-rate column means you have been picking Pokémon that are easier to catch.",
+    },
+    {
+      id: "growth",
+      label: "Growth rate",
+      prefix: "growth:",
+      encoding: "one-hot",
+      detail: "One column for the experience curve, such as slow or medium.",
+    },
+    {
+      id: "gender",
+      label: "Gender",
+      prefix: "gender:",
+      encoding: "flag",
+      detail: "On for genderless, male-only, or female-only species. Mixed-gender species leave this block off.",
+    },
   ];
 
   function categoryIndex(name) {
@@ -129,10 +164,12 @@
         weights: other.sort(byWeight),
       });
     }
+    var networked = Boolean(fit.network);
     return {
-      family: "Hierarchical Bradley–Terry",
-      strength: "s = x·w + b",
+      family: networked ? "Hierarchical Bradley–Terry, one hidden layer" : "Hierarchical Bradley–Terry",
+      strength: networked ? "s = x·w + v·tanh(Uz + c) + b" : "s = x·w + b",
       probability: "σ(s_left − s_right)",
+      network: fit.network,
       sigmaW: fit.sigmaW,
       sigmaB: fit.sigmaB,
       comparisons: fit.comparisons,
@@ -157,7 +194,32 @@
       isBaby: pokemon.baby,
       evolutionStage: pokemon.stage,
       isStarter: pokemon.starter,
+      hp: pokemon.hp,
+      attack: pokemon.attack,
+      defense: pokemon.defense,
+      specialAttack: pokemon.specialAttack,
+      specialDefense: pokemon.specialDefense,
+      speed: pokemon.speed,
+      heightM: pokemon.heightM,
+      weightKg: pokemon.weightKg,
+      captureRate: pokemon.captureRate,
+      happiness: pokemon.happiness,
+      genderRate: pokemon.genderRate,
+      hatch: pokemon.hatch,
+      growth: pokemon.growth,
     };
+  }
+
+  function continuousMatrix(pokemon) {
+    var rows = pokemon.map(function (mon) { return F.continuousFeatures(toTrait(mon)); });
+    if (!rows.some(Boolean)) return null;
+    var cols = F.CONTINUOUS_NAMES.length;
+    var values = new Float64Array(pokemon.length * cols);
+    rows.forEach(function (row, index) {
+      if (!row) return;
+      values.set(row, index * cols);
+    });
+    return { names: F.CONTINUOUS_NAMES.slice(), values: values, cols: cols };
   }
 
   function browserStorage() {
@@ -182,7 +244,9 @@
     var notice = null;
     var warm = null;
     var lock = false;
-    var design = F.buildDesignMatrix(pokemon.map(toTrait), options.extractors || F.extendedExtractors);
+    var traits = pokemon.map(toTrait);
+    var design = F.buildDesignMatrix(traits, options.extractors || F.extendedExtractors);
+    var continuous = options.continuous === false ? null : continuousMatrix(pokemon);
     var byId = new Map(pokemon.map(function (p) { return [p.id, p]; }));
     var state = null;
 
@@ -201,8 +265,13 @@
       var fit = F.fitBradleyTerry(design, rated, {
         warm: warm || undefined,
         maxIter: options.maxIter || 18,
+        continuous: continuous || undefined,
       });
-      warm = { w: fit.weights.slice(), b: fit.offset.slice() };
+      warm = {
+        w: fit.weights.slice(),
+        b: fit.offset.slice(),
+        net: fit.network ? { v: fit.network.v, c: fit.network.c, U: fit.network.U } : undefined,
+      };
       var games = F.comparisonCounts(history, fit.ids);
       var summary = F.rankingSummary(fit, design);
       var last = history[history.length - 1];

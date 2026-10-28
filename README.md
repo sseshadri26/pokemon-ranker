@@ -63,10 +63,10 @@ which is symmetric in the two species and is largest when their strengths are eq
 Strength is not a free number. It is
 
 $$
-s_i = x_i^\top w + b_i.
+s_i = x_i^\top w + v^\top \tanh(U z_i + c) + b_i.
 $$
 
-$x_i$ is a feature vector: one column per type the species has, one per generation, and optional columns for color, shape, habitat, egg group, legendary, mythical, baby, evolution stage, and starter. $w$ is a weight vector **learned from your answers**. $b_i$ is that species' own offset.
+$x_i$ is a feature vector: one column per type the species has, one per generation, and columns for color, shape, habitat, egg group, legendary, mythical, baby, evolution stage, starter, the six base stats, height, log weight, catch rate, base happiness, egg cycles, growth rate, and gender lock. $w$ is a weight vector **learned from your answers**. $z_i$ repeats the scaled stats and adds base stat total, height, log weight, and catch rate. Four hidden units apply $\tanh$, and $v$ mixes them into the strength. That is the nonlinear piece: a stat can matter more once another stat is high. Base stat total is the sum of the six stats, so it feeds the hidden layer instead of sitting beside them as a second linear column. $b_i$ is that species' own offset.
 
 Priors:
 
@@ -80,7 +80,7 @@ Adding a trait later is a new extractor next to the others in `js/model.js` (eac
 
 ### Fitting
 
-The negative log posterior is convex (logistic loss of a linear score, plus a quadratic prior). We maximize it by alternating Newton steps: an exact Newton update on $w$ (only a few dozen columns), then Gauss–Seidel Newton sweeps on each offset, warm-started from the previous answer. Uncompared offsets stay at 0.
+The linear part of the negative log posterior is convex. The hidden layer makes the whole posterior non-convex, so the fit is a mode found by alternating Newton steps from the previous answer: an exact Newton update on $w$, a Newton update on the hidden-layer weights, then Gauss–Seidel Newton sweeps on each offset. Uncompared offsets stay at 0. The Laplace step linearizes the hidden layer at that mode.
 
 ### Uncertainty
 

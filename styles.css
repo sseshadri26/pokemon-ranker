@@ -503,6 +503,7 @@ kbd {
   padding: 14px 14px 8px;
   min-width: 0;
 }
+.trait h4 { margin: 12px 0 0; font-size: 1rem; }
 .trait h3 {
   margin: 0;
   font-family: var(--serif);

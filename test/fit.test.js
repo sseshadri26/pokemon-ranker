@@ -197,6 +197,46 @@ describe("trait features", () => {
     assert.equal(design.values[design.names.indexOf("beloved")], 1);
     assert.equal(design.values[design.cols + design.names.indexOf("beloved")], 0);
   });
+  it("ranks a high-attack species above a low-attack one and exposes the hidden layer", () => {
+    function measured(id, attack) {
+      return {
+        id,
+        types: ["normal"],
+        generation: 1,
+        hp: 50,
+        attack,
+        defense: 50,
+        specialAttack: 50,
+        specialDefense: 50,
+        speed: 50,
+        heightM: 1,
+        weightKg: 20,
+        captureRate: 100,
+        happiness: 70,
+        hatch: 20,
+        genderRate: 4,
+        growth: "medium",
+      };
+    }
+    const low = measured(1, 40);
+    const high = measured(2, 140);
+    const design = F.buildDesignMatrix([low, high], F.extendedExtractors);
+    const z = new Float64Array(F.CONTINUOUS_NAMES.length * 2);
+    z.set(F.continuousFeatures(low), 0);
+    z.set(F.continuousFeatures(high), F.CONTINUOUS_NAMES.length);
+    const comparisons = [];
+    for (let k = 0; k < 24; k++) comparisons.push({ a: 2, b: 1, outcome: "a" });
+    const fit = F.fitBradleyTerry(design, comparisons, {
+      continuous: { names: F.CONTINUOUS_NAMES, values: z, cols: F.CONTINUOUS_NAMES.length },
+      maxIter: 16,
+    });
+    assert.equal(fit.network.hidden, 4);
+    assert.equal(fit.network.inputs.length, 10);
+    assert.ok(fit.strength[design.ids.indexOf(2)] > fit.strength[design.ids.indexOf(1)] + 0.2);
+    const attackWeight = fit.weights[fit.featureNames.indexOf("stat:attack")];
+    const attackInNet = fit.network.units.some((unit) => Math.abs(unit.weights.find((row) => row.name === "Attack").weight) > 1e-4);
+    assert.ok(attackWeight > 0.05 || attackInNet);
+  });
 });
 
 describe("linear algebra and the sorting bound", () => {

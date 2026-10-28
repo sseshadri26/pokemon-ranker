@@ -212,6 +212,79 @@ const starterExtractor = {
     id: "starter",
     extract: (p) => flag("starter", p.isStarter),
 };
+function statScale(value, center, spread) {
+    if (value == null || !Number.isFinite(Number(value)))
+        return null;
+    return (Number(value) - center) / spread;
+}
+function scaledColumn(name, value, center, spread) {
+    const scaled = statScale(value, center, spread);
+    return scaled == null ? {} : { [name]: scaled };
+}
+const statsExtractor = {
+    id: "stats",
+    extract: (p) => ({
+        ...scaledColumn("stat:hp", p.hp, 70, 40),
+        ...scaledColumn("stat:attack", p.attack, 75, 35),
+        ...scaledColumn("stat:defense", p.defense, 70, 35),
+        ...scaledColumn("stat:special-attack", p.specialAttack, 70, 35),
+        ...scaledColumn("stat:special-defense", p.specialDefense, 70, 35),
+        ...scaledColumn("stat:speed", p.speed, 70, 35),
+    }),
+};
+const bodyExtractor = {
+    id: "body",
+    extract: (p) => ({
+        ...scaledColumn("size:height", p.heightM, 1, 0.8),
+        ...(p.weightKg > 0 ? { "size:weight": Math.log10(p.weightKg) - 1.4 } : {}),
+    }),
+};
+const ecologyExtractor = {
+    id: "ecology",
+    extract: (p) => ({
+        ...scaledColumn("eco:capture", p.captureRate, 75, 80),
+        ...scaledColumn("eco:happiness", p.happiness, 70, 50),
+        ...scaledColumn("eco:hatch", p.hatch, 20, 15),
+    }),
+};
+const growthExtractor = {
+    id: "growth",
+    extract: (p) => oneHot("growth", p.growth),
+};
+const genderExtractor = {
+    id: "gender",
+    extract: (p) => {
+        if (p.genderRate == null)
+            return {};
+        if (p.genderRate < 0)
+            return { "gender:genderless": 1 };
+        if (p.genderRate === 0)
+            return { "gender:male-only": 1 };
+        if (p.genderRate === 8)
+            return { "gender:female-only": 1 };
+        return {};
+    },
+};
+/** Inputs to the hidden layer. BST is the sum of the six stats, so it is not also a linear column. */
+const CONTINUOUS_NAMES = ["HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed", "BST", "Height", "Weight", "Catch rate"];
+const HIDDEN = 4;
+function continuousFeatures(p) {
+    if (p.hp == null || p.attack == null || p.defense == null || p.specialAttack == null || p.specialDefense == null || p.speed == null)
+        return null;
+    const bst = p.hp + p.attack + p.defense + p.specialAttack + p.specialDefense + p.speed;
+    return [
+        statScale(p.hp, 70, 40),
+        statScale(p.attack, 75, 35),
+        statScale(p.defense, 70, 35),
+        statScale(p.specialAttack, 70, 35),
+        statScale(p.specialDefense, 70, 35),
+        statScale(p.speed, 70, 35),
+        statScale(bst, 420, 120),
+        statScale(p.heightM, 1, 0.8) ?? 0,
+        p.weightKg > 0 ? Math.log10(p.weightKg) - 1.4 : 0,
+        statScale(p.captureRate, 75, 80) ?? 0,
+    ];
+}
 /** The two traits the model is specified around. */
 const coreExtractors = [typeExtractor, generationExtractor];
 /** Core traits plus the rest of the bundled PokéAPI fields. */
@@ -226,6 +299,11 @@ const extendedExtractors = [
     babyExtractor,
     stageExtractor,
     starterExtractor,
+    statsExtractor,
+    bodyExtractor,
+    ecologyExtractor,
+    growthExtractor,
+    genderExtractor,
 ];
 function buildDesignMatrix(pokemon, extractors) {
     const sparse = pokemon.map((p) => {
@@ -314,9 +392,9 @@ function comparisonNll(d, outcome) {
         return softplus(d);
     return 0.5 * (softplus(-d) + softplus(d));
 }
-function recomputeStrengths(X, rows, cols, w, b, s) {
+function recomputeStrengths(X, rows, cols, w, b, s, net) {
     for (let i = 0; i < rows; i++) {
-        let acc = b[i];
+        let acc = b[i] + (net ? net[i] : 0);
         const base = i * cols;
         for (let k = 0; k < cols; k++)
             acc += X[base + k] * w[k];
@@ -338,6 +416,84 @@ function negativeLogPosterior(X, rows, cols, w, b, encoded, sigmaW, sigmaB) {
     }
     return nll;
 }
+function netParamCount(Z, H) {
+    return H + H + H * Z;
+}
+function fillNetwork(z, rows, Z, H, v, c, U, out, jacobian) {
+    const nParam = netParamCount(Z, H);
+    for (let i = 0; i < rows; i++) {
+        const zBase = i * Z;
+        let acc = 0;
+        const jBase = jacobian ? i * nParam : 0;
+        for (let k = 0; k < H; k++) {
+            let pre = c[k];
+            const uBase = k * Z;
+            for (let j = 0; j < Z; j++)
+                pre += U[uBase + j] * z[zBase + j];
+            const h = Math.tanh(pre);
+            const sech2 = 1 - h * h;
+            acc += v[k] * h;
+            if (jacobian) {
+                jacobian[jBase + k] = h;
+                jacobian[jBase + H + k] = v[k] * sech2;
+                const uOff = jBase + 2 * H + k * Z;
+                for (let j = 0; j < Z; j++)
+                    jacobian[uOff + j] = v[k] * sech2 * z[zBase + j];
+            }
+        }
+        out[i] = acc;
+    }
+}
+function newtonNetwork(z, rows, Z, H, v, c, U, s, encoded, precW) {
+    const nParam = netParamCount(Z, H);
+    const J = new Float64Array(rows * nParam);
+    const out = new Float64Array(rows);
+    fillNetwork(z, rows, Z, H, v, c, U, out, J);
+    const g = new Float64Array(nParam);
+    const Hess = new Float64Array(nParam * nParam);
+    const thetaAt = (p) => (p < H ? v[p] : p < 2 * H ? c[p - H] : U[p - 2 * H]);
+    for (let p = 0; p < nParam; p++) {
+        g[p] = precW * thetaAt(p);
+        Hess[p * nParam + p] = precW;
+    }
+    for (let cidx = 0; cidx < encoded.a.length; cidx++) {
+        const ai = encoded.a[cidx];
+        const bi = encoded.b[cidx];
+        const prob = sigmoid(s[ai] - s[bi]);
+        const curve = prob * (1 - prob);
+        const gp = gradD(encoded.outcome[cidx], prob);
+        const aJ = ai * nParam;
+        const bJ = bi * nParam;
+        for (let k = 0; k < nParam; k++) {
+            const dk = J[aJ + k] - J[bJ + k];
+            if (dk === 0)
+                continue;
+            g[k] += gp * dk;
+            const hk = curve * dk;
+            for (let j = 0; j < nParam; j++) {
+                const dj = J[aJ + j] - J[bJ + j];
+                if (dj !== 0)
+                    Hess[k * nParam + j] += hk * dj;
+            }
+        }
+    }
+    const step = new Float64Array(nParam);
+    const solved = solveInto(Hess, g, nParam, step);
+    let maxStep = 0;
+    for (let p = 0; p < nParam; p++) {
+        let dk = solved ? step[p] : 0.05 * g[p];
+        dk = Math.max(-1, Math.min(1, dk));
+        if (p < H)
+            v[p] -= dk;
+        else if (p < 2 * H)
+            c[p - H] -= dk;
+        else
+            U[p - 2 * H] -= dk;
+        maxStep = Math.max(maxStep, Math.abs(dk));
+    }
+    fillNetwork(z, rows, Z, H, v, c, U, out, null);
+    return { out, maxStep };
+}
 function fitBradleyTerry(design, comparisons, config = {}) {
     const sigmaW = config.sigmaW ?? DEFAULTS.sigmaW;
     const sigmaB = config.sigmaB ?? DEFAULTS.sigmaB;
@@ -348,16 +504,31 @@ function fitBradleyTerry(design, comparisons, config = {}) {
     const encoded = encode(ids, comparisons);
     const w = new Float64Array(cols);
     const b = new Float64Array(rows);
+    const continuous = config.continuous;
+    const Z = continuous && continuous.cols > 0 ? continuous.cols : 0;
+    const hidden = Z > 0 ? HIDDEN : 0;
+    const v = new Float64Array(hidden);
+    const c = new Float64Array(hidden);
+    const U = new Float64Array(hidden * Z);
+    const netOut = new Float64Array(rows);
     if (config.warm && config.warm.w.length === cols && config.warm.b.length === rows) {
         w.set(config.warm.w);
         b.set(config.warm.b);
+    }
+    if (Z > 0 && config.warm && config.warm.net
+        && config.warm.net.v.length === hidden
+        && config.warm.net.U.length === hidden * Z) {
+        v.set(config.warm.net.v);
+        c.set(config.warm.net.c);
+        U.set(config.warm.net.U);
+        fillNetwork(continuous.values, rows, Z, hidden, v, c, U, netOut, null);
     }
     for (let i = 0; i < rows; i++) {
         if (!encoded.involved[i])
             b[i] = 0;
     }
     const s = new Float64Array(rows);
-    recomputeStrengths(X, rows, cols, w, b, s);
+    recomputeStrengths(X, rows, cols, w, b, s, Z ? netOut : undefined);
     const precW = 1 / (sigmaW * sigmaW);
     const precB = 1 / (sigmaB * sigmaB);
     let iterations = 0;
@@ -411,7 +582,13 @@ function fitBradleyTerry(design, comparisons, config = {}) {
                 maxStep = Math.max(maxStep, Math.abs(dk));
             }
         }
-        recomputeStrengths(X, rows, cols, w, b, s);
+        recomputeStrengths(X, rows, cols, w, b, s, Z ? netOut : undefined);
+        if (Z > 0) {
+            const stepped = newtonNetwork(continuous.values, rows, Z, hidden, v, c, U, s, encoded, precW);
+            netOut.set(stepped.out);
+            maxStep = Math.max(maxStep, stepped.maxStep);
+            recomputeStrengths(X, rows, cols, w, b, s, netOut);
+        }
         for (let sweep = 0; sweep < sweeps; sweep++) {
             for (let i = 0; i < rows; i++) {
                 if (!encoded.involved[i])
@@ -439,14 +616,52 @@ function fitBradleyTerry(design, comparisons, config = {}) {
             break;
         }
     }
-    const laplace = laplaceUncertainty(X, rows, cols, s, encoded, precW, precB);
+    let laplaceX = X;
+    let laplaceCols = cols;
+    if (Z > 0) {
+        const nParam = netParamCount(Z, hidden);
+        const jacobian = new Float64Array(rows * nParam);
+        fillNetwork(continuous.values, rows, Z, hidden, v, c, U, netOut, jacobian);
+        laplaceCols = cols + nParam;
+        laplaceX = new Float64Array(rows * laplaceCols);
+        for (let i = 0; i < rows; i++) {
+            laplaceX.set(X.subarray(i * cols, (i + 1) * cols), i * laplaceCols);
+            laplaceX.set(jacobian.subarray(i * nParam, (i + 1) * nParam), i * laplaceCols + cols);
+        }
+    }
+    const laplace = laplaceUncertainty(laplaceX, rows, laplaceCols, s, encoded, precW, precB);
+    let network = null;
+    if (Z > 0) {
+        const units = [];
+        for (let k = 0; k < hidden; k++) {
+            units.push({
+                output: v[k],
+                outputSd: laplace.weightSd[cols + k],
+                bias: c[k],
+                biasSd: laplace.weightSd[cols + hidden + k],
+                weights: continuous.names.map((name, j) => ({
+                    name,
+                    weight: U[k * Z + j],
+                    sd: laplace.weightSd[cols + 2 * hidden + k * Z + j],
+                })),
+            });
+        }
+        network = {
+            hidden,
+            inputs: continuous.names.slice(),
+            v: Float64Array.from(v),
+            c: Float64Array.from(c),
+            U: Float64Array.from(U),
+            units,
+        };
+    }
     return {
         ids,
         featureNames: names,
         strength: s,
         sd: laplace.sd,
         weights: w,
-        weightSd: laplace.weightSd,
+        weightSd: laplace.weightSd.subarray(0, cols),
         offset: b,
         offsetVar: laplace.offsetVar,
         traitCoords: laplace.traitCoords,
@@ -455,6 +670,7 @@ function fitBradleyTerry(design, comparisons, config = {}) {
         converged,
         sigmaW,
         sigmaB,
+        network,
     };
 }
 function solveInto(H, g, n, out) {
@@ -900,6 +1116,14 @@ function explorePair(model, games, rng, avoid) {
     babyExtractor: babyExtractor,
     stageExtractor: stageExtractor,
     starterExtractor: starterExtractor,
+    statsExtractor: statsExtractor,
+    bodyExtractor: bodyExtractor,
+    ecologyExtractor: ecologyExtractor,
+    growthExtractor: growthExtractor,
+    genderExtractor: genderExtractor,
+    continuousFeatures: continuousFeatures,
+    CONTINUOUS_NAMES: CONTINUOUS_NAMES,
+    HIDDEN: HIDDEN,
     coreExtractors: coreExtractors,
     extendedExtractors: extendedExtractors,
     buildDesignMatrix: buildDesignMatrix,

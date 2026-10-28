@@ -412,6 +412,16 @@
     var value = key.indexOf(":") === -1 ? key : key.slice(key.indexOf(":") + 1);
     if (categoryId === "generation") return generationLabel(Number(value));
     if (categoryId === "stage") return "Stage " + value;
+    if (categoryId === "stats") {
+      return {
+        hp: "HP", attack: "Attack", defense: "Defense",
+        "special-attack": "Sp. Atk", "special-defense": "Sp. Def", speed: "Speed",
+      }[value] || value;
+    }
+    if (categoryId === "body") return value === "height" ? "Height" : "Weight";
+    if (categoryId === "ecology") {
+      return { capture: "Catch rate", happiness: "Happiness", hatch: "Egg cycles" }[value] || value;
+    }
     if (value === "water1") return "Water 1";
     if (value === "water2") return "Water 2";
     if (value === "humanshape") return "Human-like";
@@ -429,6 +439,12 @@
         peak = Math.max(peak, Math.abs(row.weight));
       });
     });
+    if (model.network) {
+      model.network.units.forEach(function (unit) {
+        peak = Math.max(peak, Math.abs(unit.output), Math.abs(unit.bias));
+        unit.weights.forEach(function (row) { peak = Math.max(peak, Math.abs(row.weight)); });
+      });
+    }
     function fact(term, value) {
       return "<div><dt>" + esc(term) + "</dt><dd>" + value + "</dd></div>";
     }
@@ -440,20 +456,24 @@
       fact("Offset prior", "normal, sd " + model.sigmaB.toFixed(2) + ", one per species") +
       fact("Answers in the fit", model.comparisons.toLocaleString() + " (skips left out)") +
       fact("Newton steps", String(model.iterations) + (model.converged ? ", converged" : ", still moving")) +
-      fact("Columns in x", model.columns.toLocaleString());
+      fact("Columns in x", model.columns.toLocaleString()) +
+      (model.network ? fact("Hidden layer", model.network.hidden + " tanh units on stats, BST, size, and catch rate") : "");
+    function weightRow(name, weight, sd) {
+      var tone = weight > 0.0005 ? "up" : weight < -0.0005 ? "down" : "flat";
+      var share = tone === "flat" ? 0 : Math.min(50, (Math.abs(weight) / peak) * 50);
+      var edge = weight >= 0 ? "left:50%" : "right:50%";
+      return "<li>" +
+        '<span class="trait-name">' + esc(name) + "</span>" +
+        '<span class="track" title="' + esc(formatScore(weight) + " " + formatSd(sd)) + '">' +
+        '<i class="' + tone + '" style="' + edge + ";width:" + share.toFixed(2) + '%"></i></span>' +
+        '<span class="trait-num ' + tone + '">' + formatScore(weight) + "</span>" +
+        '<span class="trait-sd">' + formatSd(sd) + "</span></li>";
+    }
     els.modelCategories.innerHTML = model.categories.map(function (category) {
       var rows = category.weights.length === 0
         ? '<p class="trait-empty">Nothing in this dex turns this category on.</p>'
         : "<ol>" + category.weights.map(function (row) {
-          var tone = row.weight > 0.0005 ? "up" : row.weight < -0.0005 ? "down" : "flat";
-          var share = tone === "flat" ? 0 : Math.min(50, (Math.abs(row.weight) / peak) * 50);
-          var edge = row.weight >= 0 ? "left:50%" : "right:50%";
-          return "<li>" +
-            '<span class="trait-name">' + esc(traitLabel(category.id, row.key)) + "</span>" +
-            '<span class="track" title="' + esc(formatScore(row.weight) + " " + formatSd(row.sd)) + '">' +
-            '<i class="' + tone + '" style="' + edge + ";width:" + share.toFixed(2) + '%"></i></span>' +
-            '<span class="trait-num ' + tone + '">' + formatScore(row.weight) + "</span>" +
-            '<span class="trait-sd">' + formatSd(row.sd) + "</span></li>";
+          return weightRow(traitLabel(category.id, row.key), row.weight, row.sd);
         }).join("") + "</ol>";
       return '<section class="trait" data-category="' + esc(category.id) + '">' +
         "<h3>" + esc(category.label) + ' <span class="encoding">' + esc(category.encoding) + "</span></h3>" +
@@ -462,6 +482,20 @@
         (category.weights.length === 1 ? " column" : " columns") + "</p>" +
         rows + "</section>";
     }).join("");
+    if (model.network) {
+      els.modelCategories.innerHTML += '<section class="trait" data-category="network">' +
+        '<h3>Hidden layer <span class="encoding">tanh</span></h3>' +
+        "<p>Each unit reads the scaled stats, base stat total, height, weight, and catch rate, squashes that sum with tanh, and adds it to the strength. " +
+        "Base stat total is the sum of the six stats, so it is an input here instead of a second linear column. " +
+        "The bend is how one stat can matter more once another is high.</p>" +
+        model.network.units.map(function (unit, index) {
+          return "<h4>Unit " + (index + 1) + "</h4><ol>" +
+            weightRow("Output", unit.output, unit.outputSd) +
+            weightRow("Bias", unit.bias, unit.biasSd) +
+            unit.weights.map(function (row) { return weightRow(row.name, row.weight, row.sd); }).join("") +
+            "</ol>";
+        }).join("") + "</section>";
+    }
   }
 
   function render() {
