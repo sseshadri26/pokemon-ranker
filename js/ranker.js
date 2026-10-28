@@ -78,7 +78,7 @@
       label: "Evolution stage",
       prefix: "stage:",
       encoding: "one-hot",
-      detail: "One column for the evolution stage, from 1 up.",
+      detail: "One column for each evolution stage and whether that species evolves further, so a stage 1 that evolves is separate from a stage 1 that does not.",
     },
     {
       id: "starter",
@@ -193,6 +193,7 @@
       isMythical: pokemon.mythical,
       isBaby: pokemon.baby,
       evolutionStage: pokemon.stage,
+      evolves: Boolean(pokemon.evolves),
       isStarter: pokemon.starter,
       hp: pokemon.hp,
       attack: pokemon.attack,

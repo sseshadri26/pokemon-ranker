@@ -9,9 +9,8 @@
  * run this script; the bundle in the repo is what index.html opens.
  */
 import { mkdir, writeFile } from "node:fs/promises";
-import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import sharp from "sharp";
+import { applyZaMegas, downloadPortrait, sortForms } from "./za-megas.mjs";
 
 const ENDPOINT = "https://beta.pokeapi.co/graphql/v1beta";
 const SPRITE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon";
@@ -174,23 +173,8 @@ async function mapPool(items, limit, worker) {
 }
 
 async function downloadArtwork(urls, dest) {
-  if (existsSync(dest) && statSync(dest).size > 0) return { url: null, cached: true };
-  for (const url of urls) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const bytes = Buffer.from(await res.arrayBuffer());
-      if (bytes.length < 80) continue;
-      await sharp(bytes)
-        .resize({ width: 360, height: 360, fit: "inside", withoutEnlargement: true })
-        .webp({ quality: 72 })
-        .toFile(dest);
-      return { url, cached: false };
-    } catch {
-      // Try the next sprite host path.
-    }
-  }
-  return { url: null, cached: false };
+  const result = await downloadPortrait(urls, dest);
+  return { url: result.url, cached: result.cached };
 }
 
 function isPixelSource(url) {
@@ -220,6 +204,12 @@ async function main() {
     if (!dex) continue;
     const from = species.evolves_from_species_id;
     parentOf.set(dex, from ? (dexOfSpecies.get(from) ?? null) : null);
+  }
+  const children = new Map();
+  for (const [dex, parent] of parentOf) {
+    if (parent == null || parent === dex) continue;
+    if (!children.has(parent)) children.set(parent, new Set());
+    children.get(parent).add(dex);
   }
 
   const jobs = [];
@@ -260,8 +250,7 @@ async function main() {
         jobs.push(forms[forms.length - 1]._job);
       }
     }
-    const kindOrder = { default: 0, mega: 1, gmax: 2, regional: 3, other: 4 };
-    forms.sort((a, b) => kindOrder[a.kind] - kindOrder[b.kind] || a.name.localeCompare(b.name));
+    sortForms(forms);
     drafted.push({
       id,
       name,
@@ -277,12 +266,14 @@ async function main() {
       mythical: Boolean(species.is_mythical),
       baby: Boolean(species.is_baby),
       stage: stageOf(id, parentOf),
+      evolves: children.has(id),
       starter: starterLine(id, parentOf),
       forms,
     });
   }
 
   drafted.sort((a, b) => a.id - b.id);
+  for (const form of applyZaMegas(drafted, { jobs: true })) jobs.push(form._job);
   const uniqueJobs = [];
   const seenFiles = new Set();
   for (const job of jobs) {
@@ -303,9 +294,9 @@ async function main() {
       failed += 1;
       saved.set(job.file, null);
     } else if (result.url) {
-      saved.set(job.file, { pixel: isPixelSource(result.url) });
+      saved.set(job.file, { pixel: job.pixel ?? isPixelSource(result.url) });
     } else {
-      saved.set(job.file, { pixel: !job.primary, cached: true });
+      saved.set(job.file, { pixel: job.pixel ?? !job.primary, cached: true });
     }
     if (finished % 50 === 0 || finished === uniqueJobs.length) {
       process.stdout.write(`\rArtwork ${finished}/${uniqueJobs.length} (${failed} missing)`);
@@ -334,6 +325,7 @@ async function main() {
       mythical: species.mythical,
       baby: species.baby,
       stage: species.stage,
+      evolves: species.evolves,
       starter: species.starter,
       art: lead?.art ?? null,
       forms,

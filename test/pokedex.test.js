@@ -2,10 +2,13 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { toTrait, MODEL_CATEGORIES } = require("../js/ranker.js");
+const F = require("../js/model.js");
 
 const root = path.join(__dirname, "..");
 const bundle = JSON.parse(fs.readFileSync(path.join(root, "data", "pokemon.json"), "utf8"));
 const POKEDEX = bundle.pokemon;
+const KIND_ORDER = { default: 0, mega: 1, gmax: 2, regional: 3, other: 4 };
 
 function species(id) {
   const found = POKEDEX.find((pokemon) => pokemon.id === id);
@@ -54,6 +57,86 @@ describe("bundled National Dex", () => {
     assert.equal(species(172).baby, true);
     assert.equal(species(172).stage, 1);
     assert.equal(species(133).starter, false);
+  });
+
+  it("separates evolution stage from whether the species evolves", () => {
+    assert.equal(typeof species(1).evolves, "boolean");
+    assert.equal(species(1).evolves, true);
+    assert.equal(species(1).stage, 1);
+    assert.equal(species(21).evolves, true);
+    assert.equal(species(22).name, "Fearow");
+    assert.equal(species(22).evolves, false);
+    assert.equal(species(22).stage, 2);
+    assert.equal(species(2).name, "Ivysaur");
+    assert.equal(species(2).evolves, true);
+    assert.equal(species(2).stage, 2);
+    assert.equal(species(6).evolves, false);
+    assert.equal(species(6).stage, 3);
+    assert.equal(species(128).name, "Tauros");
+    assert.equal(species(128).evolves, false);
+    assert.equal(species(128).stage, 1);
+    assert.equal(species(132).name, "Ditto");
+    assert.equal(species(132).evolves, false);
+    assert.equal(species(172).stage, 1);
+
+    function column(id) {
+      const keys = Object.keys(F.stageExtractor.extract(toTrait(species(id))));
+      assert.equal(keys.length, 1);
+      return keys[0];
+    }
+    assert.equal(column(128), "stage:1-final");
+    assert.equal(column(1), "stage:1-evolves");
+    assert.equal(column(22), "stage:2-final");
+    assert.equal(column(2), "stage:2-evolves");
+    assert.equal(column(6), "stage:3-final");
+    for (const pokemon of POKEDEX) {
+      assert.equal(typeof pokemon.evolves, "boolean");
+      const key = column(pokemon.id);
+      assert.match(key, /^stage:\d+-(evolves|final)$/);
+    }
+    const stage = MODEL_CATEGORIES.find((category) => category.id === "stage");
+    assert.match(stage.detail, /evolves/);
+  });
+
+  it("keeps Legends Z-A megas on the existing species", async () => {
+    const { ZA_MEGAS } = await import("../scripts/za-megas.mjs");
+    assert.equal(ZA_MEGAS.length, 48);
+    assert.equal(POKEDEX.length, 1025);
+    const megaForms = POKEDEX.flatMap((pokemon) => pokemon.forms.filter((form) => form.kind === "mega"));
+    assert.equal(megaForms.length, 96);
+
+    for (const entry of ZA_MEGAS) {
+      const form = species(entry.dex).forms.find((item) => item.name === entry.name);
+      assert.ok(form, entry.name);
+      assert.equal(form.kind, "mega");
+      assert.equal(form.pixel, false);
+      assert.deepEqual(form.types, entry.types);
+      if (form.art != null) {
+        assert.equal(form.art, entry.file);
+        assert.ok(fs.existsSync(path.join(root, "artwork", form.art)));
+      }
+    }
+
+    const raichu = species(26);
+    assert.ok(raichu.forms.some((form) => form.name === "Alolan Raichu"));
+    assert.ok(raichu.forms.some((form) => form.name === "Mega Raichu X" && form.types.length === 1));
+    assert.ok(raichu.forms.some((form) => form.name === "Mega Raichu Y"));
+    const garchomp = species(445);
+    assert.ok(garchomp.forms.some((form) => form.name === "Mega Garchomp"));
+    assert.deepEqual(garchomp.forms.find((form) => form.name === "Mega Garchomp Z").types, ["dragon"]);
+    assert.equal(species(978).forms.filter((form) => form.kind === "mega").length, 3);
+    assert.equal(species(801).forms.filter((form) => form.kind === "mega").length, 2);
+    assert.equal(species(6).forms.filter((form) => form.kind === "mega").length, 2);
+    assert.equal(POKEDEX.some((pokemon) => pokemon.name.startsWith("Mega ")), false);
+
+    for (const pokemon of POKEDEX) {
+      const keys = pokemon.forms.map((form) => `${form.kind}|${form.name}`);
+      const sorted = pokemon.forms
+        .slice()
+        .sort((a, b) => (KIND_ORDER[a.kind] ?? 9) - (KIND_ORDER[b.kind] ?? 9) || a.name.localeCompare(b.name))
+        .map((form) => `${form.kind}|${form.name}`);
+      assert.deepEqual(keys, sorted);
+    }
   });
 
   it("ships the same dex as the script the page loads", () => {

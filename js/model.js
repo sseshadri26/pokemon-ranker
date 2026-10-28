@@ -206,7 +206,12 @@ const babyExtractor = {
 };
 const stageExtractor = {
     id: "stage",
-    extract: (p) => (p.evolutionStage ? { [`stage:${p.evolutionStage}`]: 1 } : {}),
+    extract: (p) => {
+        if (!p.evolutionStage)
+            return {};
+        const fate = p.evolves ? "evolves" : "final";
+        return { [`stage:${p.evolutionStage}-${fate}`]: 1 };
+    },
 };
 const starterExtractor = {
     id: "starter",

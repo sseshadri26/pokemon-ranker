@@ -68,7 +68,7 @@ $$
 s_i = x_i^\top w + \mathrm{EV}(x_i) + b_i.
 $$
 
-$x_i$ is every input column: type, generation, color, shape, habitat, egg group, legendary, mythical, baby, evolution stage, starter, the six base stats, base stat total, height, log weight, catch rate, base happiness, egg cycles, growth rate, and gender lock. $w$ is the linear weight on each column. $\mathrm{EV}(x_i)$ is a separate network on those same columns: eight tanh units, then four tanh units, then a readout. Each unit has a bias and a learned weight on every unit that feeds it. $b_i$ is that species' own offset.
+$x_i$ is every input column: type, generation, color, shape, habitat, egg group, legendary, mythical, baby, evolution stage and whether it evolves further, starter, the six base stats, base stat total, height, log weight, catch rate, base happiness, egg cycles, growth rate, and gender lock. $w$ is the linear weight on each column. $\mathrm{EV}(x_i)$ is a separate network on those same columns: eight tanh units, then four tanh units, then a readout. Each unit has a bias and a learned weight on every unit that feeds it. $b_i$ is that species' own offset.
 
 Priors:
 

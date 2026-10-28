@@ -444,7 +444,13 @@
   function traitLabel(categoryId, key) {
     var value = key.indexOf(":") === -1 ? key : key.slice(key.indexOf(":") + 1);
     if (categoryId === "generation") return generationLabel(Number(value));
-    if (categoryId === "stage") return "Stage " + value;
+    if (categoryId === "stage") {
+      var stageParts = /^(\d+)-(evolves|final)$/.exec(value);
+      if (stageParts) {
+        return "Stage " + stageParts[1] + ", " + (stageParts[2] === "evolves" ? "evolves" : "does not evolve");
+      }
+      return "Stage " + value;
+    }
     if (categoryId === "stats") {
       return {
         hp: "HP", attack: "Attack", defense: "Defense",
