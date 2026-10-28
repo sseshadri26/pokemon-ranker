@@ -92,7 +92,7 @@
       label: "Battle stats",
       prefix: "stat:",
       encoding: "scaled",
-      detail: "One column each for HP, Attack, Defense, Sp. Atk, Sp. Def, and Speed. Each is centered and scaled so a typical stat is near 0 and a big shift is about 1.",
+      detail: "HP, Attack, Defense, Sp. Atk, Sp. Def, Speed, and base stat total. Each is centered and scaled. These are inputs to the linear score and to the network.",
     },
     {
       id: "body",
@@ -166,8 +166,8 @@
     }
     var networked = Boolean(fit.network);
     return {
-      family: networked ? "Hierarchical Bradley–Terry, one hidden layer" : "Hierarchical Bradley–Terry",
-      strength: networked ? "s = x·w + v·tanh(Uz + c) + b" : "s = x·w + b",
+      family: networked ? "Hierarchical Bradley–Terry with a two-layer network" : "Hierarchical Bradley–Terry",
+      strength: networked ? "s = x·w + EV(x) + b" : "s = x·w + b",
       probability: "σ(s_left − s_right)",
       network: fit.network,
       sigmaW: fit.sigmaW,
@@ -210,18 +210,6 @@
     };
   }
 
-  function continuousMatrix(pokemon) {
-    var rows = pokemon.map(function (mon) { return F.continuousFeatures(toTrait(mon)); });
-    if (!rows.some(Boolean)) return null;
-    var cols = F.CONTINUOUS_NAMES.length;
-    var values = new Float64Array(pokemon.length * cols);
-    rows.forEach(function (row, index) {
-      if (!row) return;
-      values.set(row, index * cols);
-    });
-    return { names: F.CONTINUOUS_NAMES.slice(), values: values, cols: cols };
-  }
-
   function browserStorage() {
     return {
       load: function () {
@@ -247,7 +235,6 @@
     var lock = false;
     var traits = pokemon.map(toTrait);
     var design = F.buildDesignMatrix(traits, options.extractors || F.extendedExtractors);
-    var continuous = options.continuous === false ? null : continuousMatrix(pokemon);
     var byId = new Map(pokemon.map(function (p) { return [p.id, p]; }));
     var state = null;
 
@@ -265,13 +252,19 @@
       var rated = F.ratedComparisons(history);
       var fit = F.fitBradleyTerry(design, rated, {
         warm: warm || undefined,
-        maxIter: options.maxIter || 18,
-        continuous: continuous || undefined,
+        maxIter: options.maxIter || 12,
+        mlp: options.mlp !== false,
       });
       warm = {
         w: fit.weights.slice(),
         b: fit.offset.slice(),
-        net: fit.network ? { v: fit.network.v, c: fit.network.c, U: fit.network.U } : undefined,
+        net: fit.network ? {
+          W1: fit.network.W1,
+          c1: fit.network.c1,
+          W2: fit.network.W2,
+          c2: fit.network.c2,
+          v: fit.network.v,
+        } : undefined,
       };
       var games = F.comparisonCounts(history, fit.ids);
       var summary = F.rankingSummary(fit, design);

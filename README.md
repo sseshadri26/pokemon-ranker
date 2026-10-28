@@ -65,10 +65,10 @@ which is symmetric in the two species and is largest when their strengths are eq
 Strength is not a free number. It is
 
 $$
-s_i = x_i^\top w + v^\top \tanh(U z_i + c) + b_i.
+s_i = x_i^\top w + \mathrm{EV}(x_i) + b_i.
 $$
 
-$x_i$ is a feature vector: one column per type the species has, one per generation, and columns for color, shape, habitat, egg group, legendary, mythical, baby, evolution stage, starter, the six base stats, height, log weight, catch rate, base happiness, egg cycles, growth rate, and gender lock. $w$ is a weight vector **learned from your answers**. $z_i$ repeats the scaled stats and adds base stat total, height, log weight, and catch rate. Four hidden units apply $\tanh$, and $v$ mixes them into the strength. That is the nonlinear piece: a stat can matter more once another stat is high. Base stat total is the sum of the six stats, so it feeds the hidden layer instead of sitting beside them as a second linear column. $b_i$ is that species' own offset.
+$x_i$ is every input column: type, generation, color, shape, habitat, egg group, legendary, mythical, baby, evolution stage, starter, the six base stats, base stat total, height, log weight, catch rate, base happiness, egg cycles, growth rate, and gender lock. $w$ is the linear weight on each column. $\mathrm{EV}(x_i)$ is a separate network on those same columns: eight tanh units, then four tanh units, then a readout. Each unit has a bias and a learned weight on every unit that feeds it. $b_i$ is that species' own offset.
 
 Priors:
 
@@ -82,7 +82,7 @@ Adding a trait later is a new extractor next to the others in `js/model.js` (eac
 
 ### Fitting
 
-The linear part of the negative log posterior is convex. The hidden layer makes the whole posterior non-convex, so the fit is a mode found by alternating Newton steps from the previous answer: an exact Newton update on $w$, a Newton update on the hidden-layer weights, then Gauss–Seidel Newton sweeps on each offset. Uncompared offsets stay at 0. The Laplace step linearizes the hidden layer at that mode.
+The linear weights are still a convex piece. The network makes the whole posterior non-convex. Each answer takes a Newton step on $w$, a few Adam steps on the network weights and biases, then Gauss–Seidel Newton sweeps on each offset, warm-started from the previous answer. Uncompared offsets stay at 0. Laplace uncertainty is reported for the linear weights.
 
 ### Uncertainty
 

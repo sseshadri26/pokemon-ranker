@@ -221,20 +221,20 @@ describe("trait features", () => {
     const low = measured(1, 40);
     const high = measured(2, 140);
     const design = F.buildDesignMatrix([low, high], F.extendedExtractors);
-    const z = new Float64Array(F.CONTINUOUS_NAMES.length * 2);
-    z.set(F.continuousFeatures(low), 0);
-    z.set(F.continuousFeatures(high), F.CONTINUOUS_NAMES.length);
     const comparisons = [];
     for (let k = 0; k < 24; k++) comparisons.push({ a: 2, b: 1, outcome: "a" });
-    const fit = F.fitBradleyTerry(design, comparisons, {
-      continuous: { names: F.CONTINUOUS_NAMES, values: z, cols: F.CONTINUOUS_NAMES.length },
-      maxIter: 16,
-    });
-    assert.equal(fit.network.hidden, 4);
-    assert.equal(fit.network.inputs.length, 10);
+    const fit = F.fitBradleyTerry(design, comparisons, { mlp: true, maxIter: 8 });
+    assert.deepEqual(fit.network.hidden, [8, 4]);
+    assert.equal(fit.network.inputCount, design.cols);
+    assert.equal(fit.network.layers.length, 2);
+    assert.equal(fit.network.output.name, "EV");
     assert.ok(fit.strength[design.ids.indexOf(2)] > fit.strength[design.ids.indexOf(1)] + 0.2);
-    const attackWeight = fit.weights[fit.featureNames.indexOf("stat:attack")];
-    const attackInNet = fit.network.units.some((unit) => Math.abs(unit.weights.find((row) => row.name === "Attack").weight) > 1e-4);
+    const attackCol = fit.featureNames.indexOf("stat:attack");
+    const attackWeight = fit.weights[attackCol];
+    let attackInNet = false;
+    for (let unit = 0; unit < fit.network.hidden[0]; unit++) {
+      if (Math.abs(fit.network.W1[unit * design.cols + attackCol]) > 1e-4) attackInNet = true;
+    }
     assert.ok(attackWeight > 0.05 || attackInNet);
   });
 });

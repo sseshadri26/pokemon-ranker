@@ -230,6 +230,9 @@ const statsExtractor = {
         ...scaledColumn("stat:special-attack", p.specialAttack, 70, 35),
         ...scaledColumn("stat:special-defense", p.specialDefense, 70, 35),
         ...scaledColumn("stat:speed", p.speed, 70, 35),
+        ...scaledColumn("stat:bst", p.hp != null && p.attack != null && p.defense != null && p.specialAttack != null && p.specialDefense != null && p.speed != null
+            ? p.hp + p.attack + p.defense + p.specialAttack + p.specialDefense + p.speed
+            : null, 420, 120),
     }),
 };
 const bodyExtractor = {
@@ -267,7 +270,7 @@ const genderExtractor = {
 };
 /** Inputs to the hidden layer. BST is the sum of the six stats, so it is not also a linear column. */
 const CONTINUOUS_NAMES = ["HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed", "BST", "Height", "Weight", "Catch rate"];
-const HIDDEN = 4;
+const HIDDEN = [8, 4];
 function continuousFeatures(p) {
     if (p.hp == null || p.attack == null || p.defense == null || p.specialAttack == null || p.specialDefense == null || p.speed == null)
         return null;
@@ -416,83 +419,186 @@ function negativeLogPosterior(X, rows, cols, w, b, encoded, sigmaW, sigmaB) {
     }
     return nll;
 }
-function netParamCount(Z, H) {
-    return H + H + H * Z;
+function tanhOf(pre) {
+    const h = Math.tanh(pre);
+    return { h, sech2: 1 - h * h };
 }
-function fillNetwork(z, rows, Z, H, v, c, U, out, jacobian) {
-    const nParam = netParamCount(Z, H);
+function mlpForward(X, rows, cols, H1, H2, W1, c1, W2, c2, v, h1, h2, ev) {
     for (let i = 0; i < rows; i++) {
-        const zBase = i * Z;
-        let acc = 0;
-        const jBase = jacobian ? i * nParam : 0;
-        for (let k = 0; k < H; k++) {
-            let pre = c[k];
-            const uBase = k * Z;
-            for (let j = 0; j < Z; j++)
-                pre += U[uBase + j] * z[zBase + j];
-            const h = Math.tanh(pre);
-            const sech2 = 1 - h * h;
-            acc += v[k] * h;
-            if (jacobian) {
-                jacobian[jBase + k] = h;
-                jacobian[jBase + H + k] = v[k] * sech2;
-                const uOff = jBase + 2 * H + k * Z;
-                for (let j = 0; j < Z; j++)
-                    jacobian[uOff + j] = v[k] * sech2 * z[zBase + j];
-            }
+        const x = i * cols;
+        for (let a = 0; a < H1; a++) {
+            let pre = c1[a];
+            const base = a * cols;
+            for (let j = 0; j < cols; j++)
+                pre += W1[base + j] * X[x + j];
+            h1[i * H1 + a] = Math.tanh(pre);
         }
-        out[i] = acc;
+        let total = 0;
+        for (let b = 0; b < H2; b++) {
+            let pre = c2[b];
+            const base = b * H1;
+            for (let a = 0; a < H1; a++)
+                pre += W2[base + a] * h1[i * H1 + a];
+            const activated = Math.tanh(pre);
+            h2[i * H2 + b] = activated;
+            total += v[b] * activated;
+        }
+        ev[i] = total;
     }
 }
-function newtonNetwork(z, rows, Z, H, v, c, U, s, encoded, precW) {
-    const nParam = netParamCount(Z, H);
-    const J = new Float64Array(rows * nParam);
-    const out = new Float64Array(rows);
-    fillNetwork(z, rows, Z, H, v, c, U, out, J);
-    const g = new Float64Array(nParam);
-    const Hess = new Float64Array(nParam * nParam);
-    const thetaAt = (p) => (p < H ? v[p] : p < 2 * H ? c[p - H] : U[p - 2 * H]);
-    for (let p = 0; p < nParam; p++) {
-        g[p] = precW * thetaAt(p);
-        Hess[p * nParam + p] = precW;
+function adamStep(param, grad, moment, second, t, lr) {
+    const b1 = 0.9;
+    const b2 = 0.999;
+    const corr1 = 1 - Math.pow(b1, t);
+    const corr2 = 1 - Math.pow(b2, t);
+    let maxStep = 0;
+    for (let i = 0; i < param.length; i++) {
+        moment[i] = b1 * moment[i] + (1 - b1) * grad[i];
+        second[i] = b2 * second[i] + (1 - b2) * grad[i] * grad[i];
+        const step = lr * (moment[i] / corr1) / (Math.sqrt(second[i] / corr2) + 1e-8);
+        const clipped = Math.max(-0.4, Math.min(0.4, step));
+        param[i] -= clipped;
+        if (Math.abs(clipped) > maxStep)
+            maxStep = Math.abs(clipped);
     }
-    for (let cidx = 0; cidx < encoded.a.length; cidx++) {
-        const ai = encoded.a[cidx];
-        const bi = encoded.b[cidx];
-        const prob = sigmoid(s[ai] - s[bi]);
-        const curve = prob * (1 - prob);
-        const gp = gradD(encoded.outcome[cidx], prob);
-        const aJ = ai * nParam;
-        const bJ = bi * nParam;
-        for (let k = 0; k < nParam; k++) {
-            const dk = J[aJ + k] - J[bJ + k];
-            if (dk === 0)
+    return maxStep;
+}
+function scoreGradient(s, encoded) {
+    const dS = new Float64Array(s.length);
+    for (let c = 0; c < encoded.a.length; c++) {
+        const ai = encoded.a[c];
+        const bi = encoded.b[c];
+        const gp = gradD(encoded.outcome[c], sigmoid(s[ai] - s[bi]));
+        dS[ai] += gp;
+        dS[bi] -= gp;
+    }
+    return dS;
+}
+/**
+ * Two tanh hidden layers. Every column of x is an input.
+ * h1 = tanh(W1 x + c1), h2 = tanh(W2 h1 + c2), EV = v · h2.
+ */
+function adamNetwork(X, rows, cols, H1, H2, W1, c1, W2, c2, v, s, baked, encoded, precW, steps, moments) {
+    const h1 = new Float64Array(rows * H1);
+    const h2 = new Float64Array(rows * H2);
+    const ev = new Float64Array(rows);
+    const prev = Float64Array.from(baked);
+    const gW1 = new Float64Array(W1.length);
+    const gc1 = new Float64Array(H1);
+    const gW2 = new Float64Array(W2.length);
+    const gc2 = new Float64Array(H2);
+    const gv = new Float64Array(H2);
+    let maxStep = 0;
+    let t = moments.t;
+    for (let step = 0; step < steps; step++) {
+        mlpForward(X, rows, cols, H1, H2, W1, c1, W2, c2, v, h1, h2, ev);
+        for (let i = 0; i < rows; i++)
+            s[i] += ev[i] - prev[i];
+        prev.set(ev);
+        t += 1;
+        gW1.fill(0);
+        gc1.fill(0);
+        gW2.fill(0);
+        gc2.fill(0);
+        gv.fill(0);
+        const dS = scoreGradient(s, encoded);
+        for (let i = 0; i < rows; i++) {
+            const dEv = dS[i];
+            if (dEv === 0)
                 continue;
-            g[k] += gp * dk;
-            const hk = curve * dk;
-            for (let j = 0; j < nParam; j++) {
-                const dj = J[aJ + j] - J[bJ + j];
-                if (dj !== 0)
-                    Hess[k * nParam + j] += hk * dj;
+            const h1Base = i * H1;
+            const h2Base = i * H2;
+            const dPre2 = new Float64Array(H2);
+            for (let b = 0; b < H2; b++) {
+                gv[b] += dEv * h2[h2Base + b];
+                const hidden = h2[h2Base + b];
+                dPre2[b] = dEv * v[b] * (1 - hidden * hidden);
+                gc2[b] += dPre2[b];
+            }
+            const dPre1 = new Float64Array(H1);
+            for (let b = 0; b < H2; b++) {
+                const base = b * H1;
+                for (let a = 0; a < H1; a++) {
+                    gW2[base + a] += dPre2[b] * h1[h1Base + a];
+                    dPre1[a] += W2[base + a] * dPre2[b];
+                }
+            }
+            const x = i * cols;
+            for (let a = 0; a < H1; a++) {
+                const hidden = h1[h1Base + a];
+                dPre1[a] *= 1 - hidden * hidden;
+                gc1[a] += dPre1[a];
+                const base = a * cols;
+                for (let j = 0; j < cols; j++)
+                    gW1[base + j] += dPre1[a] * X[x + j];
             }
         }
+        for (let i = 0; i < W1.length; i++)
+            gW1[i] += precW * W1[i];
+        for (let i = 0; i < H1; i++)
+            gc1[i] += precW * c1[i];
+        for (let i = 0; i < W2.length; i++)
+            gW2[i] += precW * W2[i];
+        for (let i = 0; i < H2; i++)
+            gc2[i] += precW * c2[i];
+        for (let i = 0; i < H2; i++)
+            gv[i] += precW * v[i];
+        const lr = 0.08;
+        maxStep = Math.max(maxStep, adamStep(W1, gW1, moments.mW1, moments.vW1, t, lr));
+        maxStep = Math.max(maxStep, adamStep(c1, gc1, moments.mc1, moments.vc1, t, lr));
+        maxStep = Math.max(maxStep, adamStep(W2, gW2, moments.mW2, moments.vW2, t, lr));
+        maxStep = Math.max(maxStep, adamStep(c2, gc2, moments.mc2, moments.vc2, t, lr));
+        maxStep = Math.max(maxStep, adamStep(v, gv, moments.mv, moments.vv, t, lr));
+        mlpForward(X, rows, cols, H1, H2, W1, c1, W2, c2, v, h1, h2, ev);
     }
-    const step = new Float64Array(nParam);
-    const solved = solveInto(Hess, g, nParam, step);
-    let maxStep = 0;
-    for (let p = 0; p < nParam; p++) {
-        let dk = solved ? step[p] : 0.05 * g[p];
-        dk = Math.max(-1, Math.min(1, dk));
-        if (p < H)
-            v[p] -= dk;
-        else if (p < 2 * H)
-            c[p - H] -= dk;
-        else
-            U[p - 2 * H] -= dk;
-        maxStep = Math.max(maxStep, Math.abs(dk));
+    moments.t = t;
+    return { out: ev, maxStep, h1, h2 };
+}
+function networkReport(names, H1, H2, W1, c1, W2, c2, v, precW) {
+    const sd = 1 / Math.sqrt(precW);
+    const topIncoming = (weights, labels, limit) => {
+        const rows = labels.map((name, index) => ({ name, weight: weights[index], sd }));
+        rows.sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight) || a.name.localeCompare(b.name));
+        return rows.slice(0, limit);
+    };
+    const hidden1 = [];
+    for (let a = 0; a < H1; a++) {
+        hidden1.push({
+            bias: c1[a],
+            biasSd: sd,
+            weights: topIncoming(W1.subarray(a * names.length, (a + 1) * names.length), names, 6),
+            fanIn: names.length,
+        });
     }
-    fillNetwork(z, rows, Z, H, v, c, U, out, null);
-    return { out, maxStep };
+    const hidden2 = [];
+    const h1Names = hidden1.map((_, index) => "Hidden 1 · " + (index + 1));
+    for (let b = 0; b < H2; b++) {
+        hidden2.push({
+            bias: c2[b],
+            biasSd: sd,
+            weights: topIncoming(W2.subarray(b * H1, (b + 1) * H1), h1Names, H1),
+            fanIn: H1,
+        });
+    }
+    const h2Names = hidden2.map((_, index) => "Hidden 2 · " + (index + 1));
+    return {
+        inputCount: names.length,
+        inputs: names.slice(),
+        hidden: [H1, H2],
+        layers: [
+            { name: "Hidden 1", activation: "tanh", units: hidden1 },
+            { name: "Hidden 2", activation: "tanh", units: hidden2 },
+        ],
+        output: {
+            name: "EV",
+            weights: topIncoming(v, h2Names, H2),
+        },
+        W1: Float64Array.from(W1),
+        c1: Float64Array.from(c1),
+        W2: Float64Array.from(W2),
+        c2: Float64Array.from(c2),
+        v: Float64Array.from(v),
+    };
 }
 function fitBradleyTerry(design, comparisons, config = {}) {
     const sigmaW = config.sigmaW ?? DEFAULTS.sigmaW;
@@ -504,31 +610,44 @@ function fitBradleyTerry(design, comparisons, config = {}) {
     const encoded = encode(ids, comparisons);
     const w = new Float64Array(cols);
     const b = new Float64Array(rows);
-    const continuous = config.continuous;
-    const Z = continuous && continuous.cols > 0 ? continuous.cols : 0;
-    const hidden = Z > 0 ? HIDDEN : 0;
-    const v = new Float64Array(hidden);
-    const c = new Float64Array(hidden);
-    const U = new Float64Array(hidden * Z);
+    const useMlp = config.mlp === true && cols > 0;
+    const H1 = useMlp ? HIDDEN[0] : 0;
+    const H2 = useMlp ? HIDDEN[1] : 0;
+    const W1 = new Float64Array(H1 * cols);
+    const c1 = new Float64Array(H1);
+    const W2 = new Float64Array(H2 * H1);
+    const c2 = new Float64Array(H2);
+    const v = new Float64Array(H2);
     const netOut = new Float64Array(rows);
+    const moments = useMlp ? {
+        t: 0,
+        mW1: new Float64Array(W1.length), vW1: new Float64Array(W1.length),
+        mc1: new Float64Array(H1), vc1: new Float64Array(H1),
+        mW2: new Float64Array(W2.length), vW2: new Float64Array(W2.length),
+        mc2: new Float64Array(H2), vc2: new Float64Array(H2),
+        mv: new Float64Array(H2), vv: new Float64Array(H2),
+    } : null;
     if (config.warm && config.warm.w.length === cols && config.warm.b.length === rows) {
         w.set(config.warm.w);
         b.set(config.warm.b);
     }
-    if (Z > 0 && config.warm && config.warm.net
-        && config.warm.net.v.length === hidden
-        && config.warm.net.U.length === hidden * Z) {
-        v.set(config.warm.net.v);
-        c.set(config.warm.net.c);
-        U.set(config.warm.net.U);
-        fillNetwork(continuous.values, rows, Z, hidden, v, c, U, netOut, null);
+    const warmNet = config.warm && config.warm.net;
+    if (useMlp && warmNet && warmNet.W1.length === W1.length && warmNet.W2.length === W2.length && warmNet.v.length === H2) {
+        W1.set(warmNet.W1);
+        c1.set(warmNet.c1);
+        W2.set(warmNet.W2);
+        c2.set(warmNet.c2);
+        v.set(warmNet.v);
+        const h1 = new Float64Array(rows * H1);
+        const h2 = new Float64Array(rows * H2);
+        mlpForward(X, rows, cols, H1, H2, W1, c1, W2, c2, v, h1, h2, netOut);
     }
     for (let i = 0; i < rows; i++) {
         if (!encoded.involved[i])
             b[i] = 0;
     }
     const s = new Float64Array(rows);
-    recomputeStrengths(X, rows, cols, w, b, s, Z ? netOut : undefined);
+    recomputeStrengths(X, rows, cols, w, b, s, useMlp ? netOut : undefined);
     const precW = 1 / (sigmaW * sigmaW);
     const precB = 1 / (sigmaB * sigmaB);
     let iterations = 0;
@@ -582,9 +701,9 @@ function fitBradleyTerry(design, comparisons, config = {}) {
                 maxStep = Math.max(maxStep, Math.abs(dk));
             }
         }
-        recomputeStrengths(X, rows, cols, w, b, s, Z ? netOut : undefined);
-        if (Z > 0) {
-            const stepped = newtonNetwork(continuous.values, rows, Z, hidden, v, c, U, s, encoded, precW);
+        recomputeStrengths(X, rows, cols, w, b, s, useMlp ? netOut : undefined);
+        if (useMlp) {
+            const stepped = adamNetwork(X, rows, cols, H1, H2, W1, c1, W2, c2, v, s, netOut, encoded, precW, 4, moments);
             netOut.set(stepped.out);
             maxStep = Math.max(maxStep, stepped.maxStep);
             recomputeStrengths(X, rows, cols, w, b, s, netOut);
@@ -616,45 +735,8 @@ function fitBradleyTerry(design, comparisons, config = {}) {
             break;
         }
     }
-    let laplaceX = X;
-    let laplaceCols = cols;
-    if (Z > 0) {
-        const nParam = netParamCount(Z, hidden);
-        const jacobian = new Float64Array(rows * nParam);
-        fillNetwork(continuous.values, rows, Z, hidden, v, c, U, netOut, jacobian);
-        laplaceCols = cols + nParam;
-        laplaceX = new Float64Array(rows * laplaceCols);
-        for (let i = 0; i < rows; i++) {
-            laplaceX.set(X.subarray(i * cols, (i + 1) * cols), i * laplaceCols);
-            laplaceX.set(jacobian.subarray(i * nParam, (i + 1) * nParam), i * laplaceCols + cols);
-        }
-    }
-    const laplace = laplaceUncertainty(laplaceX, rows, laplaceCols, s, encoded, precW, precB);
-    let network = null;
-    if (Z > 0) {
-        const units = [];
-        for (let k = 0; k < hidden; k++) {
-            units.push({
-                output: v[k],
-                outputSd: laplace.weightSd[cols + k],
-                bias: c[k],
-                biasSd: laplace.weightSd[cols + hidden + k],
-                weights: continuous.names.map((name, j) => ({
-                    name,
-                    weight: U[k * Z + j],
-                    sd: laplace.weightSd[cols + 2 * hidden + k * Z + j],
-                })),
-            });
-        }
-        network = {
-            hidden,
-            inputs: continuous.names.slice(),
-            v: Float64Array.from(v),
-            c: Float64Array.from(c),
-            U: Float64Array.from(U),
-            units,
-        };
-    }
+    const laplace = laplaceUncertainty(X, rows, cols, s, encoded, precW, precB);
+    const network = useMlp ? networkReport(names, H1, H2, W1, c1, W2, c2, v, precW) : null;
     return {
         ids,
         featureNames: names,

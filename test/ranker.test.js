@@ -98,8 +98,10 @@ describe("ranker session", () => {
       { storage: store, explore: 0, rng: () => 0.5, now: () => 1 },
     );
     const model = ranker.getState().model;
-    assert.equal(model.family, "Hierarchical Bradley–Terry");
-    assert.equal(model.strength, "s = x·w + b");
+    assert.equal(model.family, "Hierarchical Bradley–Terry with a two-layer network");
+    assert.equal(model.strength, "s = x·w + EV(x) + b");
+    assert.deepEqual(model.network.hidden, [8, 4]);
+    assert.equal(model.network.inputCount, model.columns);
     assert.equal(model.sigmaW, 0.7);
     assert.equal(model.sigmaB, 1);
     assert.equal(model.comparisons, 0);
