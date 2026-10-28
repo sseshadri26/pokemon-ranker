@@ -154,31 +154,170 @@
     return '<img src="' + esc(src) + '" alt="" class="' + (pixel ? "pixel" : "") + '" draggable="false">';
   }
 
-  function spriteScale(count) {
-    if (count <= 1) return 1;
-    if (count === 2) return 0.64;
-    if (count === 3) return 0.56;
-    if (count === 4) return 0.36;
-    if (count <= 8) return 0.42;
-    if (count <= 20) return 0.28;
-    return 0.18;
+  function inkBox(file) {
+    var raw = (typeof FORM_INK !== "undefined" && file && FORM_INK[file]) || [0, 0, 1000, 1000];
+    return { l: raw[0] / 1000, t: raw[1] / 1000, r: raw[2] / 1000, b: raw[3] / 1000 };
   }
 
-  function clusterPositions(count) {
-    if (count <= 1) return [{ x: 50, y: 50 }];
-    if (count === 2) return [{ x: 32, y: 50 }, { x: 68, y: 50 }];
-    if (count === 3) return [{ x: 50, y: 28 }, { x: 28, y: 72 }, { x: 72, y: 72 }];
-    if (count === 4) return [{ x: 50, y: 18 }, { x: 82, y: 50 }, { x: 50, y: 82 }, { x: 18, y: 50 }];
-    var radius = 49 - spriteScale(count) * 50;
-    var spots = [];
-    for (var i = 0; i < count; i++) {
-      var angle = -Math.PI / 2 + (i / count) * Math.PI * 2;
-      spots.push({
-        x: Math.round((50 + Math.cos(angle) * radius) * 10) / 10,
-        y: Math.round((50 + Math.sin(angle) * radius) * 10) / 10,
-      });
+  function isCompactForm(kind) {
+    return kind === "mega" || kind === "gmax";
+  }
+
+  function opaqueSize(scale, box) {
+    return { w: (box.r - box.l) * scale * 100, h: (box.b - box.t) * scale * 100 };
+  }
+
+  function spriteFromOpaque(anchorX, anchorY, scale, box) {
+    var ox = ((box.l + box.r) / 2 - 0.5) * scale * 100;
+    var oy = ((box.t + box.b) / 2 - 0.5) * scale * 100;
+    return { x: anchorX - ox, y: anchorY - oy, scale: scale };
+  }
+
+  function opaqueRect(cx, cy, size) {
+    return {
+      left: cx - size.w / 2,
+      right: cx + size.w / 2,
+      top: cy - size.h / 2,
+      bottom: cy + size.h / 2,
+    };
+  }
+
+  function boxesClear(rects, gap) {
+    for (var i = 0; i < rects.length; i++) {
+      var rect = rects[i];
+      if (rect.left < 0.5 || rect.right > 99.5 || rect.top < 0.5 || rect.bottom > 99.5) return false;
+      for (var j = i + 1; j < rects.length; j++) {
+        var other = rects[j];
+        var apartX = rect.right + gap <= other.left || other.right + gap <= rect.left;
+        var apartY = rect.bottom + gap <= other.top || other.bottom + gap <= rect.top;
+        if (!apartX && !apartY) return false;
+      }
     }
-    return spots;
+    return true;
+  }
+
+  function placePair(boxes, scales) {
+    var gap = 2.2;
+    var size = scales.map(function (scale, index) { return opaqueSize(scale, boxes[index]); });
+    var total = size[0].w + gap + size[1].w;
+    if (total > 97) return null;
+    var x0 = (100 - total) / 2 + size[0].w / 2;
+    var x1 = x0 + size[0].w / 2 + gap + size[1].w / 2;
+    var floor = 96.5;
+    var y0 = floor - size[0].h / 2;
+    var y1 = floor - size[1].h / 2;
+    var lift = Math.max(0.5 - (y0 - size[0].h / 2), 0.5 - (y1 - size[1].h / 2), 0);
+    y0 += lift;
+    y1 += lift;
+    var rects = [opaqueRect(x0, y0, size[0]), opaqueRect(x1, y1, size[1])];
+    if (!boxesClear(rects, gap)) return null;
+    return [
+      spriteFromOpaque(x0, y0, scales[0], boxes[0]),
+      spriteFromOpaque(x1, y1, scales[1], boxes[1]),
+    ];
+  }
+
+  function placeTriangle(boxes, scales) {
+    var gap = 2.2;
+    var size = scales.map(function (scale, index) { return opaqueSize(scale, boxes[index]); });
+    var total = size[1].w + gap + size[2].w;
+    if (total > 97) return null;
+    var x1 = (100 - total) / 2 + size[1].w / 2;
+    var x2 = x1 + size[1].w / 2 + gap + size[2].w / 2;
+    var floor = 96.5;
+    var y1 = floor - size[1].h / 2;
+    var y2 = floor - size[2].h / 2;
+    var rowTop = Math.min(y1 - size[1].h / 2, y2 - size[2].h / 2);
+    var y0 = rowTop - gap - size[0].h / 2;
+    var rects = [
+      opaqueRect(50, y0, size[0]),
+      opaqueRect(x1, y1, size[1]),
+      opaqueRect(x2, y2, size[2]),
+    ];
+    if (!boxesClear(rects, gap)) return null;
+    return [
+      spriteFromOpaque(50, y0, scales[0], boxes[0]),
+      spriteFromOpaque(x1, y1, scales[1], boxes[1]),
+      spriteFromOpaque(x2, y2, scales[2], boxes[2]),
+    ];
+  }
+
+  function placeDiamond(boxes, scales) {
+    var gap = 2;
+    var size = scales.map(function (scale, index) { return opaqueSize(scale, boxes[index]); });
+    var angles = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
+    for (var radius = 16; radius <= 42; radius += 0.5) {
+      var points = angles.map(function (angle) {
+        return { x: 50 + Math.cos(angle) * radius, y: 50 + Math.sin(angle) * radius };
+      });
+      var rects = points.map(function (point, index) { return opaqueRect(point.x, point.y, size[index]); });
+      var clear = rects.every(function (rect) {
+        return rect.left >= 0.5 && rect.right <= 99.5 && rect.top >= 0.5 && rect.bottom <= 99.5;
+      });
+      if (!clear) continue;
+      var apart = true;
+      for (var i = 0; i < 4; i++) {
+        var other = rects[(i + 1) % 4];
+        var rect = rects[i];
+        var apartX = rect.right + gap <= other.left || other.right + gap <= rect.left;
+        var apartY = rect.bottom + gap <= other.top || other.bottom + gap <= rect.top;
+        if (!apartX && !apartY) apart = false;
+      }
+      if (apart) {
+        return points.map(function (point, index) {
+          return spriteFromOpaque(point.x, point.y, scales[index], boxes[index]);
+        });
+      }
+    }
+    return null;
+  }
+
+  function placeRing(boxes, weights) {
+    var count = boxes.length;
+    var base = count <= 8 ? 0.4 : count <= 20 ? 0.28 : 0.18;
+    var radius = count > 12 ? 34 : 30;
+    return boxes.map(function (box, index) {
+      var scale = base * weights[index];
+      var angle = -Math.PI / 2 + (index / count) * Math.PI * 2;
+      var ax = 50 + Math.cos(angle) * radius;
+      var ay = 50 + Math.sin(angle) * radius;
+      var ux = 50 - ax;
+      var uy = 50 - ay;
+      var len = Math.hypot(ux, uy) || 1;
+      ux /= len;
+      uy /= len;
+      var padX = ux >= 0 ? 1 - box.r : box.l;
+      var padY = uy >= 0 ? 1 - box.b : box.t;
+      var move = Math.max(0, (Math.abs(ux) * padX + Math.abs(uy) * padY) * scale * 100 * 0.85);
+      return spriteFromOpaque(ax + ux * move, ay + uy * move, scale, box);
+    });
+  }
+
+  function placeForms(forms) {
+    var count = forms.length;
+    if (count <= 1) return [{ x: 50, y: 50, scale: 1 }];
+    var boxes = forms.map(function (form) { return inkBox(form.art); });
+    var weights = forms.map(function (form) { return isCompactForm(form.kind) ? 0.62 : 1; });
+    if (count > 4) return placeRing(boxes, weights);
+    var chosen = null;
+    for (var step = 56; step >= 0; step--) {
+      var multiplier = 0.3 + step * 0.012;
+      var scales = weights.map(function (weight) { return multiplier * weight; });
+      var placed = count === 2
+        ? placePair(boxes, scales)
+        : count === 3
+          ? placeTriangle(boxes, scales)
+          : placeDiamond(boxes, scales);
+      if (placed) {
+        chosen = placed;
+        break;
+      }
+    }
+    if (chosen) return chosen;
+    return weights.map(function (weight, index) {
+      var angle = -Math.PI / 2 + (index / count) * Math.PI * 2;
+      return { x: 50 + Math.cos(angle) * 28, y: 50 + Math.sin(angle) * 28, scale: 0.36 * weight };
+    });
   }
 
   function cardHtml(mon, side) {
@@ -190,8 +329,7 @@
     var head = '<p class="dex-no">#' + String(mon.id).padStart(4, "0") + "</p>" +
       "<h2>" + esc(mon.name) + "</h2>" +
       '<p class="meta">' + metaLine(mon) + "</p>";
-    var spots = clusterPositions(forms.length);
-    var scale = spriteScale(forms.length);
+    var placed = placeForms(forms);
     var lead = 0;
     for (var i = 0; i < forms.length; i++) {
       if (forms[i].kind === "default") {
@@ -200,20 +338,27 @@
       }
     }
     var sprites = forms.map(function (entry, index) {
-      var spot = spots[index];
-      var label = forms.length > 1 && forms.length <= 6
-        ? '<span class="sprite-name">' + esc(entry.name) + "</span>"
-        : "";
+      var spot = placed[index];
+      var z = index + 1;
+      if (isCompactForm(entry.kind)) z = forms.length + 2 + index;
+      else if (index === lead) z = forms.length + 1;
       return '<span class="sprite" style="left:' + spot.x.toFixed(2) + "%;top:" + spot.y.toFixed(2) +
-        "%;--sprite:" + scale + ";z-index:" + (index === lead ? forms.length + 1 : index + 1) +
+        "%;--sprite:" + spot.scale.toFixed(3) + ";z-index:" + z +
         '" title="' + esc(entry.name) + '">' +
-        portraitHtml(entry.art || mon.art, entry.pixel, entry.name) + label + "</span>";
+        portraitHtml(entry.art || mon.art, entry.pixel, entry.name) + "</span>";
     }).join("");
+    var names = "";
+    if (forms.length > 1 && forms.length <= 6) {
+      names = '<ol class="form-names">' + forms.map(function (entry) {
+        return "<li>" + esc(entry.name) + "</li>";
+      }).join("") + "</ol>";
+    }
     var layout = forms.length <= 1 ? "single" : forms.length === 2 ? "pair" : forms.length === 3 ? "triangle" : forms.length === 4 ? "diamond" : "circle";
     return '<article class="card ' + side + '">' +
       '<button type="button" class="pick" data-testid="' + testId + '" data-side="' + side +
       '" aria-label="' + esc(aria) + '">' +
       '<div class="portrait" data-forms="' + forms.length + '" data-layout="' + layout + '">' + sprites + "</div>" +
+      names +
       head +
       '<div class="types">' + typeChips(mon.types) + "</div>" +
       '<span class="hint">Pick ' + hint + "</span></button></article>";

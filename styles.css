@@ -305,23 +305,22 @@ nav button.on { background: var(--ink); color: var(--bg); border-color: var(--in
   filter: drop-shadow(0 12px 8px rgba(60, 36, 10, 0.18));
 }
 .sprite img.pixel { image-rendering: pixelated; }
-.sprite-name {
-  position: absolute;
-  left: 4%;
-  right: 4%;
-  bottom: 2%;
-  padding: 1px 4px;
+.form-names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.form-names li {
+  max-width: 100%;
+  padding: 2px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--card) 84%, transparent);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.68rem;
+  background: color-mix(in srgb, var(--card-ink) 8%, transparent);
+  font-size: 0.78rem;
   font-weight: 700;
-  line-height: 1.2;
-  text-align: center;
-  color: var(--card-ink);
-  pointer-events: none;
+  line-height: 1.3;
 }
 .monogram {
   display: grid;

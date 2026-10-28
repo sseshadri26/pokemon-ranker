@@ -28,7 +28,7 @@ The scripts are ordinary JavaScript files, not modules, so the page loads from a
 | Skip | Skip | `↑` |
 | Undo the last answer | Undo | `Backspace`, `Ctrl+Z`, or `Cmd+Z` |
 
-Forms overlap in one picture (a triangle for three, a diamond for four, a ring when there are more). A click or swipe on the card picks the species, every form. The left and right cards stay the same size either way.
+Forms overlap in one picture (a triangle for three, a diamond for four, a ring when there are more). Each sprite is shifted by the empty margin in its artwork, so that padding sits over the other form. Mega and Gigantamax forms are drawn smaller. Regional forms and other formes, such as Shaymin's two formes, stay the same size. The form names sit in a row under the picture. A click or swipe on the card picks the species, every form. The left and right cards stay the same size either way.
 
 **Rankings** is the full order, with a score, a Laplace uncertainty, and how many matchups that species has been in. Filter by type or generation, or search by name. The header shows the matchup count and a confidence percentage.
 
