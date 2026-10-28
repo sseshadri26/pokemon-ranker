@@ -51,8 +51,16 @@
     genFilter: document.getElementById("gen-filter"),
     modal: document.getElementById("modal"),
     viewDuel: document.getElementById("view-duel"),
+    viewChoose: document.getElementById("view-choose"),
+    viewHistory: document.getElementById("view-history"),
     viewBoard: document.getElementById("view-board"),
     viewModel: document.getElementById("view-model"),
+    history: document.getElementById("history"),
+    historyCount: document.getElementById("history-count"),
+    matchLog: document.getElementById("match-log"),
+    historyEmpty: document.getElementById("history-empty"),
+    setup: document.getElementById("setup"),
+    setupNote: document.getElementById("setup-note"),
   };
 
   function typeColor(type) {
@@ -358,6 +366,24 @@
     els.cardA.innerHTML = cardHtml(pair.left, "a");
     els.cardB.innerHTML = cardHtml(pair.right, "b");
     els.undo.disabled = state().history.length === 0;
+    fitPortraits();
+  }
+
+  function fitPortraits() {
+    if (view !== "duel") return;
+    [els.cardA, els.cardB].forEach(function (slot) {
+      var pick = slot.querySelector(".pick");
+      var portrait = slot.querySelector(".portrait");
+      if (!pick || !portrait) return;
+      var used = 0;
+      Array.prototype.forEach.call(pick.children, function (child) {
+        if (child !== portrait) used += child.offsetHeight;
+      });
+      var size = Math.min(pick.clientWidth - 4, pick.clientHeight - used - 8);
+      if (size < 48) size = 48;
+      portrait.style.width = size + "px";
+      portrait.style.height = size + "px";
+    });
   }
 
   function shownRows() {
@@ -505,13 +531,47 @@
     els.duel.hidden = !showDuel;
     els.board.hidden = view !== "board";
     els.model.hidden = view !== "model";
+    els.history.hidden = view !== "history";
+    els.setup.hidden = view !== "setup";
     els.noDuel.hidden = view !== "duel" || Boolean(pair.left && pair.right);
     els.viewDuel.className = view === "duel" ? "on" : "";
+    els.viewChoose.className = view === "setup" ? "on" : "";
+    els.viewHistory.className = view === "history" ? "on" : "";
     els.viewBoard.className = view === "board" ? "on" : "";
     els.viewModel.className = view === "model" ? "on" : "";
+    document.body.classList.toggle("view-duel", view === "duel");
     if (showDuel) renderDuel();
     if (view === "board") renderBoard();
     if (view === "model") renderModel();
+    if (view === "history") renderHistory();
+  }
+
+  function outcomeLabel(outcome, left, right) {
+    if (outcome === "tie") return "Tie";
+    if (outcome === "skip") return "Skip";
+    if (outcome === "a") return left + " won";
+    if (outcome === "b") return right + " won";
+    return outcome;
+  }
+
+  function renderHistory() {
+    var history = state().history;
+    var byId = state().byId;
+    els.historyCount.textContent = history.length.toLocaleString() + " " + (history.length === 1 ? "answer" : "answers");
+    els.historyEmpty.hidden = history.length !== 0;
+    var rows = history.slice().reverse();
+    els.matchLog.innerHTML = rows.map(function (entry) {
+      var left = byId.get(entry.a);
+      var right = byId.get(entry.b);
+      var leftName = left ? left.name : "#" + entry.a;
+      var rightName = right ? right.name : "#" + entry.b;
+      var when = new Date(entry.at).toLocaleString();
+      return "<li>" +
+        '<span class="when">' + esc(when) + "</span>" +
+        '<span class="bout">' + esc(leftName) + " vs " + esc(rightName) + "</span>" +
+        '<span class="result">' + esc(outcomeLabel(entry.outcome, leftName, rightName)) + "</span>" +
+        "</li>";
+    }).join("");
   }
 
   function votePhrase(mon) {
@@ -555,8 +615,67 @@
     els.genFilter.appendChild(option);
   });
 
+  var chosen = { a: null, b: null };
+
+  function suggest(input, list, side) {
+    var query = input.value.trim().toLowerCase();
+    list.innerHTML = "";
+    if (!query) return;
+    var hits = pokemon.filter(function (mon) {
+      return mon.name.toLowerCase().indexOf(query) !== -1;
+    }).slice(0, 8);
+    list.innerHTML = hits.map(function (mon) {
+      return '<li><button type="button" data-id="' + mon.id + '">' + esc(mon.name) + "</button></li>";
+    }).join("");
+    list.querySelectorAll("button").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var id = Number(button.getAttribute("data-id"));
+        var mon = pokemon.filter(function (entry) { return entry.id === id; })[0];
+        chosen[side] = mon || null;
+        input.value = mon ? mon.name : "";
+        document.getElementById(side === "a" ? "chosen-a" : "chosen-b").textContent = mon ? mon.name : "No species chosen";
+        list.innerHTML = "";
+        els.setupNote.hidden = true;
+      });
+    });
+  }
+
+  document.getElementById("query-a").addEventListener("input", function (event) {
+    chosen.a = null;
+    document.getElementById("chosen-a").textContent = "No species chosen";
+    suggest(event.target, document.getElementById("suggest-a"), "a");
+  });
+  document.getElementById("query-b").addEventListener("input", function (event) {
+    chosen.b = null;
+    document.getElementById("chosen-b").textContent = "No species chosen";
+    suggest(event.target, document.getElementById("suggest-b"), "b");
+  });
+  document.getElementById("begin-match").addEventListener("click", function () {
+    if (!chosen.a || !chosen.b) {
+      els.setupNote.hidden = false;
+      els.setupNote.textContent = "Choose a species for each side.";
+      return;
+    }
+    if (chosen.a.id === chosen.b.id) {
+      els.setupNote.hidden = false;
+      els.setupNote.textContent = "Pick two different species.";
+      return;
+    }
+    ranker.queuePair(chosen.a.id, chosen.b.id);
+    view = "duel";
+    render();
+  });
+
   document.getElementById("view-duel").addEventListener("click", function () {
     view = "duel";
+    render();
+  });
+  document.getElementById("view-choose").addEventListener("click", function () {
+    view = "setup";
+    render();
+  });
+  document.getElementById("view-history").addEventListener("click", function () {
+    view = "history";
     render();
   });
   document.getElementById("view-board").addEventListener("click", function () {
@@ -699,5 +818,6 @@
     }
   });
 
+  window.addEventListener("resize", fitPortraits);
   render();
 })();

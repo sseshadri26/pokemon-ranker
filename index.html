@@ -16,6 +16,22 @@
   </script>
 </head>
 <body>
+  <div class="desk-bar">
+    <label class="dex-switch">
+      Generation look
+      <select id="dex-theme" aria-label="Pokédex style">
+        <option value="1">I · Kanto</option>
+        <option value="2">II · Johto</option>
+        <option value="3">III · Hoenn</option>
+        <option value="4">IV · Sinnoh</option>
+        <option value="5">V · Unova</option>
+        <option value="6">VI · Kalos</option>
+        <option value="7">VII · Alola</option>
+        <option value="8">VIII · Galar</option>
+        <option value="9">IX · Paldea</option>
+      </select>
+    </label>
+  </div>
   <div class="device">
     <div class="face" aria-hidden="true">
       <span class="antenna"></span>
@@ -41,21 +57,9 @@
         <p class="bound" id="bound"></p>
       </div>
       <nav>
-        <label class="dex-switch">
-          Pokédex
-          <select id="dex-theme" aria-label="Pokédex style">
-            <option value="1">I · Kanto</option>
-            <option value="2">II · Johto</option>
-            <option value="3">III · Hoenn</option>
-            <option value="4">IV · Sinnoh</option>
-            <option value="5">V · Unova</option>
-            <option value="6">VI · Kalos</option>
-            <option value="7">VII · Alola</option>
-            <option value="8">VIII · Galar</option>
-            <option value="9">IX · Paldea</option>
-          </select>
-        </label>
         <button type="button" id="view-duel" class="on">Duel</button>
+        <button type="button" id="view-choose">Choose</button>
+        <button type="button" id="view-history">History</button>
         <button type="button" id="view-board">Rankings</button>
         <button type="button" id="view-model">Model</button>
         <button type="button" id="export">Export</button>
@@ -141,6 +145,33 @@
       </div>
       <dl class="facts" id="model-facts"></dl>
       <div class="traits" id="model-categories"></div>
+    </section>
+    <section class="history" id="history" hidden>
+      <p class="shown" id="history-count"></p>
+      <ol class="match-log" id="match-log"></ol>
+      <p class="empty" id="history-empty" hidden>No matchups yet.</p>
+    </section>
+    <section class="setup" id="setup" hidden>
+      <div class="chooser">
+        <div>
+          <label>
+            Left species
+            <input id="query-a" placeholder="Search the dex" autocomplete="off" aria-label="Left species">
+          </label>
+          <p class="chosen" id="chosen-a">No species chosen</p>
+          <ul class="suggest" id="suggest-a"></ul>
+        </div>
+        <div>
+          <label>
+            Right species
+            <input id="query-b" placeholder="Search the dex" autocomplete="off" aria-label="Right species">
+          </label>
+          <p class="chosen" id="chosen-b">No species chosen</p>
+          <ul class="suggest" id="suggest-b"></ul>
+        </div>
+      </div>
+      <button type="button" class="ghost" id="begin-match">Show this matchup</button>
+      <p class="empty" id="setup-note" hidden></p>
     </section>
     <p class="empty" id="no-duel" hidden>The dex needs at least two species before a duel can start.</p>
   </div>

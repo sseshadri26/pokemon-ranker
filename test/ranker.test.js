@@ -75,6 +75,22 @@ describe("ranker session", () => {
     assert.equal(store.raw, "[]");
   });
 
+  it("shows a chosen pair until that matchup is answered", () => {
+    const ranker = createRanker(
+      [mon(1, "A", "fire"), mon(2, "B", "water"), mon(3, "C", "grass")],
+      { storage: null, explore: 0, rng: () => 0.5, now: () => 1 },
+    );
+    ranker.queuePair(1, 3);
+    assert.deepEqual([ranker.getState().pair.a, ranker.getState().pair.b], [1, 3]);
+    ranker.answer("tie");
+    const answered = ranker.getState().history.at(-1);
+    assert.equal(answered.a, 1);
+    assert.equal(answered.b, 3);
+    assert.equal(answered.outcome, "tie");
+    ranker.queuePair(2, 3);
+    assert.deepEqual([ranker.getState().pair.a, ranker.getState().pair.b], [2, 3]);
+  });
+
   it("lists every trait category and the weight learned for each column", () => {
     const store = memory();
     const ranker = createRanker(

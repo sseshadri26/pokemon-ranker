@@ -242,6 +242,7 @@
     var storage = options.storage === undefined ? browserStorage() : options.storage;
     var history = [];
     var notice = null;
+    var forced = null;
     var warm = null;
     var lock = false;
     var traits = pokemon.map(toTrait);
@@ -275,7 +276,10 @@
       var games = F.comparisonCounts(history, fit.ids);
       var summary = F.rankingSummary(fit, design);
       var last = history[history.length - 1];
-      var pair = F.selectNextPair(
+      var forcedPair = forced && forced.a !== forced.b && byId.has(forced.a) && byId.has(forced.b)
+        ? { a: forced.a, b: forced.b }
+        : null;
+      var pair = forcedPair || F.selectNextPair(
         {
           ids: fit.ids,
           strength: fit.strength,
@@ -348,9 +352,15 @@
 
     return {
       getState: function () { return state; },
+      queuePair: function (a, b) {
+        if (lock || a === b || !byId.has(a) || !byId.has(b)) return state;
+        forced = { a: a, b: b };
+        return recompute();
+      },
       answer: function (outcome) {
         if (!state.pair || lock) return state;
         lock = true;
+        forced = null;
         commit(history.concat([{
           a: state.pair.a,
           b: state.pair.b,

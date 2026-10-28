@@ -4,7 +4,7 @@ Rank the National Dex by how much **you** like each Pokémon. Favordex shows two
 
 The ranked unit is the **base species** (National Dex #1 through the latest in PokéAPI, 1,025 as of this bundle). Every alternate form — Mega, Gigantamax, regional, and the rest — is drawn on that species' card. One vote covers all of them. They are not separate ranked entries.
 
-The **Pokédex** menu changes the device, not just the colors: the red Kanto unit, the Johto flip pad, the orange Omega Ruby / Alpha Sapphire handheld, the Sinnoh book, the Unova slab, the Kalos hex frame, the red Alola Rotom Dex, the Galar Rotom Phone on its side, and the Paldea notebook. That choice is saved in this browser under `favordex.dex.v1`.
+The **Generation look** menu sits outside the device and changes the hardware, not just the colors: the red Kanto unit, the Johto flip pad, the orange Omega Ruby / Alpha Sapphire handheld, the Sinnoh book, the Unova slab, the Kalos hex frame, the red Alola Rotom Dex, the Galar Rotom Phone on its side, and the Paldea notebook. That choice is saved in this browser under `favordex.dex.v1`.
 
 ## Run it
 
@@ -27,6 +27,8 @@ The scripts are ordinary JavaScript files, not modules, so the page loads from a
 | Tie | Tie | `↓` |
 | Skip | Skip | `↑` |
 | Undo the last answer | Undo | `Backspace`, `Ctrl+Z`, or `Cmd+Z` |
+| See every answer | History | |
+| Choose the two species | Choose, search each side, then Show this matchup | |
 
 The main form fills the middle of the picture. A Mega or Gigantamax form is smaller and sits in a corner, starting at the bottom right. Two equal forms, such as Shaymin's formes or a regional pair, stay large and overlap only a little of each other's artwork. The form names sit in a row under the picture. A click or swipe on the card picks the species, every form. The left and right cards stay the same size either way.
 
