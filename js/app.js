@@ -182,94 +182,69 @@
     };
   }
 
-  function boxesClear(rects, gap) {
-    for (var i = 0; i < rects.length; i++) {
-      var rect = rects[i];
-      if (rect.left < 0.5 || rect.right > 99.5 || rect.top < 0.5 || rect.bottom > 99.5) return false;
-      for (var j = i + 1; j < rects.length; j++) {
-        var other = rects[j];
-        var apartX = rect.right + gap <= other.left || other.right + gap <= rect.left;
-        var apartY = rect.bottom + gap <= other.top || other.bottom + gap <= rect.top;
-        if (!apartX && !apartY) return false;
+  function overlapAmount(a, b) {
+    return {
+      x: Math.min(a.right, b.right) - Math.max(a.left, b.left),
+      y: Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top),
+    };
+  }
+
+  function placeHero(boxes, compact, hero) {
+    var heroScale = 0.96;
+    var badgeCount = compact.filter(Boolean).length;
+    var badgeScale = badgeCount > 2 ? 0.3 : badgeCount > 1 ? 0.34 : 0.4;
+    var corners = [
+      { x: 82, y: 82 },
+      { x: 18, y: 82 },
+      { x: 82, y: 20 },
+      { x: 18, y: 20 },
+    ];
+    var placed = [];
+    var corner = 0;
+    for (var i = 0; i < boxes.length; i++) {
+      if (i === hero) {
+        placed.push(spriteFromOpaque(50, 50, heroScale, boxes[i]));
+      } else {
+        var spot = corners[Math.min(corner, corners.length - 1)];
+        corner += 1;
+        var size = opaqueSize(badgeScale, boxes[i]);
+        var x = Math.min(98 - size.w / 2, Math.max(size.w / 2 + 1, spot.x));
+        var y = Math.min(98 - size.h / 2, Math.max(size.h / 2 + 1, spot.y));
+        placed.push(spriteFromOpaque(x, y, badgeScale, boxes[i]));
       }
     }
-    return true;
+    return placed;
   }
 
-  function placePair(boxes, scales) {
-    var gap = 2.2;
-    var size = scales.map(function (scale, index) { return opaqueSize(scale, boxes[index]); });
-    var total = size[0].w + gap + size[1].w;
-    if (total > 97) return null;
-    var x0 = (100 - total) / 2 + size[0].w / 2;
-    var x1 = x0 + size[0].w / 2 + gap + size[1].w / 2;
-    var floor = 96.5;
-    var y0 = floor - size[0].h / 2;
-    var y1 = floor - size[1].h / 2;
-    var lift = Math.max(0.5 - (y0 - size[0].h / 2), 0.5 - (y1 - size[1].h / 2), 0);
-    y0 += lift;
-    y1 += lift;
-    var rects = [opaqueRect(x0, y0, size[0]), opaqueRect(x1, y1, size[1])];
-    if (!boxesClear(rects, gap)) return null;
-    return [
-      spriteFromOpaque(x0, y0, scales[0], boxes[0]),
-      spriteFromOpaque(x1, y1, scales[1], boxes[1]),
-    ];
-  }
-
-  function placeTriangle(boxes, scales) {
-    var gap = 2.2;
-    var size = scales.map(function (scale, index) { return opaqueSize(scale, boxes[index]); });
-    var total = size[1].w + gap + size[2].w;
-    if (total > 97) return null;
-    var x1 = (100 - total) / 2 + size[1].w / 2;
-    var x2 = x1 + size[1].w / 2 + gap + size[2].w / 2;
-    var floor = 96.5;
-    var y1 = floor - size[1].h / 2;
-    var y2 = floor - size[2].h / 2;
-    var rowTop = Math.min(y1 - size[1].h / 2, y2 - size[2].h / 2);
-    var y0 = rowTop - gap - size[0].h / 2;
-    var rects = [
-      opaqueRect(50, y0, size[0]),
-      opaqueRect(x1, y1, size[1]),
-      opaqueRect(x2, y2, size[2]),
-    ];
-    if (!boxesClear(rects, gap)) return null;
-    return [
-      spriteFromOpaque(50, y0, scales[0], boxes[0]),
-      spriteFromOpaque(x1, y1, scales[1], boxes[1]),
-      spriteFromOpaque(x2, y2, scales[2], boxes[2]),
-    ];
-  }
-
-  function placeDiamond(boxes, scales) {
-    var gap = 2;
-    var size = scales.map(function (scale, index) { return opaqueSize(scale, boxes[index]); });
-    var angles = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
-    for (var radius = 16; radius <= 42; radius += 0.5) {
-      var points = angles.map(function (angle) {
-        return { x: 50 + Math.cos(angle) * radius, y: 50 + Math.sin(angle) * radius };
-      });
-      var rects = points.map(function (point, index) { return opaqueRect(point.x, point.y, size[index]); });
-      var clear = rects.every(function (rect) {
-        return rect.left >= 0.5 && rect.right <= 99.5 && rect.top >= 0.5 && rect.bottom <= 99.5;
-      });
-      if (!clear) continue;
-      var apart = true;
-      for (var i = 0; i < 4; i++) {
-        var other = rects[(i + 1) % 4];
-        var rect = rects[i];
-        var apartX = rect.right + gap <= other.left || other.right + gap <= rect.left;
-        var apartY = rect.bottom + gap <= other.top || other.bottom + gap <= rect.top;
-        if (!apartX && !apartY) apart = false;
-      }
-      if (apart) {
-        return points.map(function (point, index) {
-          return spriteFromOpaque(point.x, point.y, scales[index], boxes[index]);
-        });
-      }
+  function placeEqualPair(boxes) {
+    for (var step = 28; step >= 0; step--) {
+      var scale = 0.56 + step * 0.008;
+      var left = opaqueSize(scale, boxes[0]);
+      var right = opaqueSize(scale, boxes[1]);
+      var minX = left.w + right.w - 98;
+      var minY = left.h + right.h - 98;
+      if (minX > 22 || minY > 22) continue;
+      var overlapX = Math.max(minX, 8);
+      var overlapY = Math.max(minY, 8);
+      var x0 = 1 + left.w / 2;
+      var y0 = 1 + left.h / 2;
+      var x1 = x0 + left.w / 2 - overlapX + right.w / 2;
+      var y1 = y0 + left.h / 2 - overlapY + right.h / 2;
+      if (x1 + right.w / 2 > 99) x1 = 99 - right.w / 2;
+      if (y1 + right.h / 2 > 99) y1 = 99 - right.h / 2;
+      var rects = [opaqueRect(x0, y0, left), opaqueRect(x1, y1, right)];
+      if (rects[0].left < -1 || rects[0].top < -1 || rects[1].right > 101 || rects[1].bottom > 101) continue;
+      var got = overlapAmount(rects[0], rects[1]);
+      if (got.x < 5 || got.y < 5) continue;
+      return [
+        spriteFromOpaque(x0, y0, scale, boxes[0]),
+        spriteFromOpaque(x1, y1, scale, boxes[1]),
+      ];
     }
-    return null;
+    return [
+      spriteFromOpaque(34, 38, 0.66, boxes[0]),
+      spriteFromOpaque(66, 62, 0.66, boxes[1]),
+    ];
   }
 
   function placeRing(boxes, weights) {
@@ -297,27 +272,16 @@
     var count = forms.length;
     if (count <= 1) return [{ x: 50, y: 50, scale: 1 }];
     var boxes = forms.map(function (form) { return inkBox(form.art); });
-    var weights = forms.map(function (form) { return isCompactForm(form.kind) ? 0.62 : 1; });
-    if (count > 4) return placeRing(boxes, weights);
-    var chosen = null;
-    for (var step = 56; step >= 0; step--) {
-      var multiplier = 0.3 + step * 0.012;
-      var scales = weights.map(function (weight) { return multiplier * weight; });
-      var placed = count === 2
-        ? placePair(boxes, scales)
-        : count === 3
-          ? placeTriangle(boxes, scales)
-          : placeDiamond(boxes, scales);
-      if (placed) {
-        chosen = placed;
-        break;
-      }
+    var compact = forms.map(function (form) { return isCompactForm(form.kind); });
+    var hero = -1;
+    for (var i = 0; i < count; i++) {
+      if (compact[i]) continue;
+      if (hero < 0 || forms[i].kind === "default") hero = i;
     }
-    if (chosen) return chosen;
-    return weights.map(function (weight, index) {
-      var angle = -Math.PI / 2 + (index / count) * Math.PI * 2;
-      return { x: 50 + Math.cos(angle) * 28, y: 50 + Math.sin(angle) * 28, scale: 0.36 * weight };
-    });
+    if (hero >= 0 && compact.some(Boolean)) return placeHero(boxes, compact, hero);
+    if (count === 2) return placeEqualPair(boxes);
+    var weights = compact.map(function (isSmall) { return isSmall ? 0.62 : 1; });
+    return placeRing(boxes, weights);
   }
 
   function cardHtml(mon, side) {
