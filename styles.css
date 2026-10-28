@@ -1424,7 +1424,7 @@ body.view-duel .stage {
   gap: 8px;
 }
 body.view-duel .card { padding: 8px; min-height: 0; overflow: hidden; }
-body.view-duel .pick { min-height: 0; height: 100%; overflow: hidden; }
+body.view-duel .pick { min-height: 0; height: 100%; overflow: visible; }
 body.view-duel .portrait {
   flex: 1 1 0;
   min-height: 0;
@@ -1439,7 +1439,14 @@ body.view-duel h2 { font-size: 1.25rem; margin: 0; }
 body.view-duel .dex-no, body.view-duel .meta, body.view-duel .footnote { display: none; }
 body.view-duel .form-names { margin: 4px 0 0; max-height: 1.6em; overflow: hidden; }
 body.view-duel .types { margin-top: 4px; }
-body.view-duel .hint { padding-top: 2px; font-size: 0.8rem; }
+body.view-duel .hint {
+  margin-top: 6px;
+  padding-top: 0;
+  flex: 0 0 auto;
+  line-height: 1.2;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
 body.view-duel .portrait { flex: 0 0 auto; }
 body.view-duel .seal { width: 52px; height: 52px; }
 @media (max-height: 780px) {

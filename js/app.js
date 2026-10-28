@@ -367,6 +367,7 @@
     els.cardB.innerHTML = cardHtml(pair.right, "b");
     els.undo.disabled = state().history.length === 0;
     fitPortraits();
+    requestAnimationFrame(fitPortraits);
   }
 
   function fitPortraits() {
@@ -377,9 +378,15 @@
       if (!pick || !portrait) return;
       var used = 0;
       Array.prototype.forEach.call(pick.children, function (child) {
-        if (child !== portrait) used += child.offsetHeight;
+        if (child === portrait) return;
+        var style = getComputedStyle(child);
+        used += child.offsetHeight + parseFloat(style.marginTop) + parseFloat(style.marginBottom);
       });
-      var size = Math.min(pick.clientWidth - 4, pick.clientHeight - used - 8);
+      var screen = document.querySelector(".screen");
+      var screenBottom = screen ? screen.getBoundingClientRect().bottom : window.innerHeight;
+      var limit = Math.min(window.innerHeight, screenBottom) - 8;
+      var room = limit - pick.getBoundingClientRect().top - used;
+      var size = Math.min(pick.clientWidth - 8, pick.clientHeight - used - 6, room);
       if (size < 48) size = 48;
       portrait.style.width = size + "px";
       portrait.style.height = size + "px";
