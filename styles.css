@@ -504,6 +504,14 @@ kbd {
   min-width: 0;
 }
 .trait h4 { margin: 12px 0 0; font-size: 1rem; }
+.sheet-sub { margin: 18px 0 4px; font-size: clamp(1.6rem, 3vw, 2.2rem); }
+.sheet-note { max-width: 70ch; color: var(--muted); }
+.net-flow { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
+.net-col { flex: 1 0 220px; }
+.net-col h3, .net-node h4 { margin: 0 0 6px; font-size: 1rem; font-family: var(--sans); font-style: normal; }
+.net-inputs { margin: 8px 0 0; padding-left: 18px; }
+.net-node { margin-top: 8px; padding: 8px; border-radius: 12px; background: color-mix(in srgb, var(--card-ink) 6%, var(--card)); }
+.net-bias, .net-more { margin: 4px 0; color: var(--card-muted); font-size: 0.78rem; }
 .trait h3 {
   margin: 0;
   font-family: var(--serif);
