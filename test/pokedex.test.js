@@ -129,10 +129,14 @@ describe("bundled National Dex", () => {
     assert.equal(species(1).games.includes("colosseum"), false);
 
     const games = F.gamesExtractor.extract(toTrait(species(1)));
-    assert.equal(games["game:red-blue"], 1);
+    const shares = Object.values(games);
+    assert.equal(games["game:red-blue"], 1 / shares.length);
+    assert.ok(Math.abs(shares.reduce((sum, value) => sum + value, 0) - 1) < 1e-12);
     assert.equal(games["game:colosseum"], undefined);
     const category = MODEL_CATEGORIES.find((item) => item.id === "games");
     assert.equal(category.prefix, "game:");
+    assert.equal(category.encoding, "share");
+    assert.match(category.detail, /1\/n/);
   });
 
   it("keeps Legends Z-A megas on the existing species", async () => {

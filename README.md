@@ -26,13 +26,13 @@ The scripts are ordinary JavaScript files, not modules, so the page loads from a
 | Pick the right species, every form | Click or tap the right card, or swipe right | `→` |
 | Tie | Tie | `↓` |
 | Skip | Skip | `↑` |
-| Undo the last answer | Undo | `Backspace`, `Ctrl+Z`, or `Cmd+Z` |
+| Undo the last answer and show that matchup again | Undo | `Backspace`, `Ctrl+Z`, or `Cmd+Z` |
 | See every answer | History | |
 | Choose the two species | Choose, search each side, then Show this matchup | |
 
 The main form fills the middle of the picture. A Mega or Gigantamax form is smaller and sits in a corner, starting at the bottom right. Two equal forms, such as Shaymin's formes or a regional pair, stay large and overlap only a little of each other's artwork. The form names sit in a row under the picture. A click or swipe on the card picks the species, every form. The left and right cards stay the same size either way.
 
-**Rankings** is the full order, with a score, a Laplace uncertainty, and how many matchups that species has been in. Filter by type or generation, or search by name. The header shows the matchup count and a confidence percentage.
+**Rankings** is the full order, with a score, a Laplace uncertainty, and how many matchups that species has been in. Filter by type or generation, or search by name. Drag a row, or use its Up and Down controls, to move a species. The move is stored as a comparison against each species it passed — repeated, still only against those neighbors, when one result would not hold after the refit — and the ranking is fit again. The header shows the matchup count and a confidence percentage. Undo walks back through those comparisons and puts each removed matchup, including a skip, back on the duel.
 
 **Model** names the predictor: hierarchical Bradley–Terry, strength `s = x·w + b`, the normal priors on the weights and the species offsets, and the alternating Newton fit. Under that it lists every trait category in `x` — type, generation, color, shape, habitat, egg group, legendary, mythical, baby, evolution stage, and starter — and the learned weight and Laplace standard deviation of each column.
 
@@ -68,7 +68,7 @@ $$
 s_i = x_i^\top w + \mathrm{EV}(x_i) + b_i.
 $$
 
-$x_i$ is every input column: type, generation, the version groups whose Pokédex includes the species, color, shape, habitat, egg group, legendary, mythical, baby, evolution stage and whether it evolves further, the strength of its pre-evolution, the mean and best strength among every species it evolves into, starter, the six base stats, base stat total, height, log weight, catch rate, base happiness, egg cycles, growth rate, and gender lock. $w$ is the linear weight on each column. $\mathrm{EV}(x_i)$ is a separate network on those same columns: eight tanh units, then four tanh units, then a readout. Each unit has a bias and a learned weight on every unit that feeds it. $b_i$ is that species' own offset.
+$x_i$ is every input column: type, generation, the version groups whose Pokédex includes the species (each present game is $1/n$ for a species in $n$ games, so that block sums to 1), color, shape, habitat, egg group, legendary, mythical, baby, evolution stage and whether it evolves further, the tanh-scaled strength of a pre-evolution you have compared, the mean and best such strength among evolutions you have compared, starter, the six base stats, base stat total, height, log weight, catch rate, base happiness, egg cycles, growth rate, and gender lock. $w$ is the linear weight on each column. $\mathrm{EV}(x_i)$ is a separate network on those same columns: eight tanh units, then four tanh units, then a readout. Each unit has a bias and a learned weight on every unit that feeds it. $b_i$ is that species' own offset.
 
 Priors:
 
@@ -78,11 +78,11 @@ $$
 
 with $\sigma_w = 0.7$ and $\sigma_b = 1$. The prior on $b_i$ is the partial-pooling knob. A species you have barely rated stays near the strength its traits predict, because the offset is pulled toward 0. A species you have rated many times follows those picks: the likelihood overwhelms the prior. When two species are nearly tied on direct evidence, the one whose traits you have preferred ranks higher. The prior also pins the additive invariance of Bradley–Terry, so strengths cannot all drift upward together.
 
-Adding a trait later is a new extractor next to the others in `js/model.js` (each one returns a map of column name to number, and `extendedExtractors` is the list the page uses). If it needs data PokéAPI can supply, add the field in `scripts/fetch-pokemon.mjs` and pass it through `toTrait` in `js/ranker.js`. The fitter does not change. Columns are the sorted union of whatever the extractors emit. The evolution-score columns are the exception: they are appended after that union, because a column that starts at 0 for every species would be dropped, and each fit step copies them from the previous step's strengths.
+Adding a trait later is a new extractor next to the others in `js/model.js` (each one returns a map of column name to number, and `extendedExtractors` is the list the page uses). If it needs data PokéAPI can supply, add the field in `scripts/fetch-pokemon.mjs` and pass it through `toTrait` in `js/ranker.js`. The fitter does not change. Columns are the sorted union of whatever the extractors emit. The evolution-score columns are the exception: they are appended after that union, because a column that starts at 0 for every species would be dropped, and each fit step copies $\tanh$ of the previous step's strength with those columns removed. Only a relative you have compared is copied, so an uncompared neighbor cannot pull the score, and the copy stays in $(-1, 1)$ so a family cannot amplify itself.
 
 ### Fitting
 
-The linear weights are still a convex piece. The network makes the whole posterior non-convex. Each answer takes a Newton step on $w$, a few Adam steps on the network weights and biases, then Gauss–Seidel Newton sweeps on each offset, warm-started from the previous answer. Before that Newton step, the pre-evolution and evolution-score columns are rewritten from the strengths of the previous step and then treated as ordinary inputs. Uncompared offsets stay at 0. A line nobody has compared leaves those score columns at 0, so an unrated evolution does not inherit a rating until some compared line has taught the weight. Laplace uncertainty is reported for the linear weights.
+The linear weights are still a convex piece. The network makes the whole posterior non-convex. Each answer takes a Newton step on $w$, a few Adam steps on the network weights and biases, then Gauss–Seidel Newton sweeps on each offset, warm-started from the previous answer. Before that Newton step, the pre-evolution and evolution-score columns are rewritten from the previous step and then treated as ordinary inputs. The copied number is $\tanh$ of the relative's strength apart from these columns, and it is 0 when that relative has not been compared. Uncompared offsets stay at 0. A line nobody has compared leaves those score columns at 0, so an unrated evolution does not inherit a rating until some compared line has taught the weight. Laplace uncertainty is reported for the linear weights.
 
 ### Uncertainty
 

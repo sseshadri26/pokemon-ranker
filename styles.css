@@ -423,9 +423,10 @@ kbd {
 .leans { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; color: var(--muted); }
 .leans .up { color: var(--moss); }
 .leans .down { color: var(--coral); }
+.reorder-note { margin: 0 0 10px; color: var(--muted); font-size: 0.9rem; }
 .ledger-head, .ledger li {
   display: grid;
-  grid-template-columns: 52px 48px minmax(0, 1.4fr) 72px 72px 110px 72px;
+  grid-template-columns: 44px 52px 48px minmax(0, 1.4fr) 72px 72px 110px 72px;
   gap: 10px;
   align-items: center;
 }
@@ -440,8 +441,26 @@ kbd {
 .ledger li {
   padding: 8px 10px;
   border-top: 1px solid var(--line);
-  content-visibility: auto;
+  cursor: grab;
 }
+.ledger li:focus-visible { outline: 2px solid var(--coral); outline-offset: -2px; }
+.ledger li.dragging { opacity: 0.45; cursor: grabbing; }
+.ledger li.drop-before { box-shadow: inset 0 3px 0 var(--coral); }
+.ledger li.drop-after { box-shadow: inset 0 -3px 0 var(--coral); }
+.move { display: flex; flex-direction: column; gap: 3px; }
+.move button {
+  padding: 1px 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--field-ink);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  cursor: pointer;
+}
+.move button:focus-visible { outline: 2px solid var(--coral); outline-offset: 1px; }
 .rank { font-family: var(--serif); font-style: italic; font-size: 1.25rem; color: var(--muted); }
 .mini {
   width: 44px;
@@ -1398,9 +1417,9 @@ html[data-dex="9"] .card {
   .versus { flex-direction: row; flex-wrap: wrap; }
   .ghost, .texty { width: auto; }
   .ledger-head { display: none; }
-  .ledger li { grid-template-columns: 36px 44px minmax(0, 1fr); }
+  .ledger li { grid-template-columns: 44px 36px 44px minmax(0, 1fr); }
   .gen, .games { display: none; }
-  .score, .sd { grid-column: 3; }
+  .score, .sd { grid-column: 4; }
   .trait li { grid-template-columns: minmax(0, 1fr) auto auto; }
   .track { grid-column: 1 / -1; }
 }

@@ -158,9 +158,11 @@ function solveLower(L, n, x, out) {
  *
  * The app turns on `extendedExtractors` (types and generation, the games a
  * species appears in, plus color, shape, habitat, egg group, legendary /
- * mythical / baby, evolution stage, and starter). Evolution-score columns
- * are appended after the matrix is built and filled from the previous
- * step's strengths. Tests can pass a smaller list.
+ * mythical / baby, evolution stage, and starter). A species in n games
+ * puts 1/n on each of those columns. Evolution-score columns are appended
+ * after the matrix is built. Each fit step copies tanh of a compared
+ * relative's strength with those columns removed, so a line cannot amplify
+ * itself. Tests can pass a smaller list.
  */
 function flag(name, on) {
     return on ? { [name]: 1 } : {};
@@ -281,16 +283,29 @@ const gamesExtractor = {
     extract: (p) => {
         if (!Array.isArray(p.games))
             return {};
-        const out = {};
+        const present = [];
+        const seen = new Set();
         for (const game of p.games) {
-            if (!game || SKIPPED_GAMES.has(game))
+            if (!game || SKIPPED_GAMES.has(game) || seen.has(game))
                 continue;
-            out[`game:${game}`] = 1;
+            seen.add(game);
+            present.push(game);
         }
+        if (present.length === 0)
+            return {};
+        const share = 1 / present.length;
+        const out = {};
+        for (const game of present)
+            out[`game:${game}`] = share;
         return out;
     },
 };
-/** Filled later from lagged strengths. Emitting zeros here would drop the columns. */
+/**
+ * Filled later from lagged strengths of relatives that have actually been
+ * compared. Emitting zeros here would drop the columns. The copied value is
+ * tanh of that relative's strength with these columns removed, so it stays
+ * in (-1, 1) and cannot feed back into itself.
+ */
 const EVO_COLUMNS = ["evo:from", "evo:into-mean", "evo:into-max"];
 const evolutionExtractor = {
     id: "evolution",
@@ -422,7 +437,28 @@ function evolutionGraph(pokemon) {
     }
     return { parent, children, descendants };
 }
-function writeEvolutionScores(X, rows, cols, s, evo) {
+/** tanh(s − evolution columns), and 0 for a species that has never been compared. */
+function evolutionSignal(X, rows, cols, w, s, evo, seen) {
+    const out = new Float64Array(rows);
+    const fromCol = evo.from;
+    const meanCol = evo.intoMean;
+    const maxCol = evo.intoMax;
+    for (let i = 0; i < rows; i++) {
+        if (seen && !seen[i])
+            continue;
+        let stripped = s[i];
+        const base = i * cols;
+        if (fromCol >= 0)
+            stripped -= X[base + fromCol] * w[fromCol];
+        if (meanCol >= 0)
+            stripped -= X[base + meanCol] * w[meanCol];
+        if (maxCol >= 0)
+            stripped -= X[base + maxCol] * w[maxCol];
+        out[i] = Math.tanh(stripped);
+    }
+    return out;
+}
+function writeEvolutionScores(X, rows, cols, signal, seen, evo) {
     const fromCol = evo.from;
     const meanCol = evo.intoMean;
     const maxCol = evo.intoMax;
@@ -431,7 +467,7 @@ function writeEvolutionScores(X, rows, cols, s, evo) {
     for (let i = 0; i < rows; i++) {
         const base = i * cols;
         const elder = evo.parent[i];
-        X[base + fromCol] = elder >= 0 ? s[elder] : 0;
+        X[base + fromCol] = elder >= 0 && (!seen || seen[elder]) ? signal[elder] : 0;
         const kids = evo.descendants[i];
         if (!kids || kids.length === 0) {
             X[base + meanCol] = 0;
@@ -440,13 +476,23 @@ function writeEvolutionScores(X, rows, cols, s, evo) {
         }
         let sum = 0;
         let max = -Infinity;
+        let count = 0;
         for (let k = 0; k < kids.length; k++) {
-            const score = s[kids[k]];
+            const child = kids[k];
+            if (seen && !seen[child])
+                continue;
+            const score = signal[child];
             sum += score;
             if (score > max)
                 max = score;
+            count++;
         }
-        X[base + meanCol] = sum / kids.length;
+        if (count === 0) {
+            X[base + meanCol] = 0;
+            X[base + maxCol] = 0;
+            continue;
+        }
+        X[base + meanCol] = sum / count;
         X[base + maxCol] = max;
     }
 }
@@ -770,7 +816,8 @@ function fitBradleyTerry(design, comparisons, config = {}) {
     for (let iter = 0; iter < maxIter; iter++) {
         iterations = iter + 1;
         if (config.evolution) {
-            writeEvolutionScores(X, rows, cols, s, config.evolution);
+            const signal = evolutionSignal(X, rows, cols, w, s, config.evolution, encoded.involved);
+            writeEvolutionScores(X, rows, cols, signal, encoded.involved, config.evolution);
             if (useMlp)
                 mlpForward(X, rows, cols, H1, H2, W1, c1, W2, c2, v, h1Buf, h2Buf, netOut);
             recomputeStrengths(X, rows, cols, w, b, s, useMlp ? netOut : undefined);

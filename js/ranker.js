@@ -28,8 +28,8 @@
       id: "games",
       label: "Games",
       prefix: "game:",
-      encoding: "multi-hot",
-      detail: "One column for each version group this species appears in, from its Pokédex entries. Expansions such as the Isle of Armor have their own column as well as the base game. Legends: Z-A is not listed; PokéAPI has no version group for it yet.",
+      encoding: "share",
+      detail: "One column for each version group this species appears in, from its Pokédex entries. A species in n of those games puts 1/n on each, so the games block sums to 1. A species in one game still puts 1 on that column. Games it is absent from stay 0. Expansions such as the Isle of Armor have their own column as well as the base game. Legends: Z-A is not listed; PokéAPI has no version group for it yet.",
     },
     {
       id: "color",
@@ -92,7 +92,7 @@
       label: "Evolution scores",
       prefix: "evo:",
       encoding: "score",
-      detail: "The current strength of the species this one evolves from, and the mean and best strength of every species it evolves into, including later stages. Those scores are copied from the previous fit step, so ranking a line moves its relatives. A missing relative leaves that column at 0.",
+      detail: "The strength of the pre-evolution, and the mean and best strength among later evolutions, counting only relatives you have compared. Each value is tanh of that relative's strength with these columns left out, so it stays between -1 and 1 and a line cannot amplify itself. Scores are copied from the previous fit step. A relative you have not compared leaves its part at 0.",
     },
     {
       id: "starter",
@@ -395,7 +395,56 @@
       undoLast: function () {
         if (history.length === 0 || lock) return state;
         lock = true;
+        var last = history[history.length - 1];
+        forced = { a: last.a, b: last.b };
         commit(F.undo(history));
+        release();
+        return state;
+      },
+      movePast: function (id, passedIds, direction) {
+        if (lock || (direction !== "above" && direction !== "below")) return state;
+        if (!byId.has(id) || !Array.isArray(passedIds)) return state;
+        var unique = [];
+        var seen = new Set();
+        for (var i = 0; i < passedIds.length; i++) {
+          var other = passedIds[i];
+          if (other === id || !byId.has(other) || seen.has(other)) continue;
+          seen.add(other);
+          unique.push(other);
+        }
+        if (unique.length === 0) return state;
+        var base = history.slice();
+        function batch(copies) {
+          var entries = [];
+          for (var copy = 0; copy < copies; copy++) {
+            for (var n = 0; n < unique.length; n++) {
+              entries.push({
+                a: id,
+                b: unique[n],
+                outcome: direction === "above" ? "a" : "b",
+                at: options.now ? options.now() : Date.now(),
+              });
+            }
+          }
+          return entries;
+        }
+        function onRequestedSide() {
+          var by = new Map();
+          for (var r = 0; r < state.rows.length; r++) by.set(state.rows[r].pokemon.id, state.rows[r]);
+          var mine = by.get(id);
+          for (var n = 0; n < unique.length; n++) {
+            var other = by.get(unique[n]);
+            if (direction === "above" && !(mine.score > other.score + 0.05)) return false;
+            if (direction === "below" && !(other.score > mine.score + 0.05)) return false;
+          }
+          return true;
+        }
+        lock = true;
+        var schedule = [1, 2, 4, 8, 16];
+        for (var step = 0; step < schedule.length; step++) {
+          commit(base.concat(batch(schedule[step])));
+          if (onRequestedSide()) break;
+        }
         release();
         return state;
       },

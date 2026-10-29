@@ -291,6 +291,62 @@ describe("trait features", () => {
   });
 });
 
+describe("game shares", () => {
+  it("puts 1/2 on each of two games and 0 on a game the species is absent from", () => {
+    const design = F.buildDesignMatrix(
+      [
+        { id: 1, types: ["normal"], generation: 1, games: ["alpha", "beta"] },
+        { id: 2, types: ["normal"], generation: 1, games: ["alpha", "gamma"] },
+        { id: 3, types: ["normal"], generation: 1, games: ["delta"] },
+        { id: 4, types: ["normal"], generation: 1, games: ["alpha", "colosseum"] },
+      ],
+      [F.gamesExtractor],
+    );
+    const col = (name) => design.names.indexOf(`game:${name}`);
+    const cell = (row, name) => design.values[row * design.cols + col(name)];
+    assert.equal(cell(0, "alpha"), 0.5);
+    assert.equal(cell(0, "beta"), 0.5);
+    assert.equal(cell(0, "gamma"), 0);
+    assert.equal(cell(1, "beta"), 0);
+    assert.equal(cell(2, "delta"), 1);
+    assert.equal(cell(2, "alpha"), 0);
+    assert.equal(col("colosseum"), -1);
+    assert.equal(cell(3, "alpha"), 1);
+  });
+
+  it("does not let a long game list outweigh a repeated preference", () => {
+    function poke(id, type, games) {
+      return { id, types: [type], generation: 1, games };
+    }
+    const many = Array.from({ length: 16 }, (_, i) => `g${i}`);
+    const roster = [];
+    for (let i = 0; i < 8; i++) roster.push(poke(i + 1, "normal", many));
+    for (let i = 0; i < 8; i++) roster.push(poke(i + 9, "normal", ["obscure"]));
+    roster.push(poke(17, "fire", ["g0"]));
+    roster.push(poke(18, "normal", many));
+    const comparisons = [];
+    for (let k = 0; k < 48; k++) comparisons.push({ a: (k % 8) + 1, b: (k % 8) + 9, outcome: "a" });
+    for (let k = 0; k < 2; k++) comparisons.push({ a: 17, b: 1 + k, outcome: "a" });
+    const design = F.buildDesignMatrix(roster, [F.typeExtractor, F.generationExtractor, F.gamesExtractor]);
+    const gameCols = design.names
+      .map((name, index) => (name.startsWith("game:") ? index : -1))
+      .filter((index) => index >= 0);
+    const row = (id) => design.ids.indexOf(id);
+    let l1 = 0;
+    for (const index of gameCols) l1 += Math.abs(design.values[row(18) * design.cols + index]);
+    closeTo(l1, 1, 8);
+    closeTo(design.values[row(18) * design.cols + design.names.indexOf("game:g0")], 1 / 16, 8);
+    assert.equal(design.values[row(18) * design.cols + design.names.indexOf("game:obscure")], 0);
+    const fit = F.fitBradleyTerry(design, comparisons, { mlp: false });
+    const preferred = fit.strength[fit.ids.indexOf(17)];
+    const widelyReleased = fit.strength[fit.ids.indexOf(18)];
+    assert.ok(
+      preferred > widelyReleased,
+      `preference ${preferred} lost to the species that is only in more games ${widelyReleased}`,
+    );
+  });
+});
+
 describe("linear algebra and the sorting bound", () => {
   it("inverts a 2×2 SPD matrix", () => {
     const factor = F.invertSPD(new Float64Array([4, 1, 1, 3]), 2);

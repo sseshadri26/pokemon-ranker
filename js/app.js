@@ -429,7 +429,11 @@
         return '<span class="type" style="background:' + typeColor(name) + ";color:" + typeInk(name) + '">' +
           esc(titleType(name)) + "</span>";
       }).join("");
-      return "<li>" +
+      return '<li data-id="' + row.pokemon.id + '" tabindex="0">' +
+        '<span class="move">' +
+        '<button type="button" data-dir="up" aria-label="Move ' + esc(row.pokemon.name) + ' up">Up</button>' +
+        '<button type="button" data-dir="down" aria-label="Move ' + esc(row.pokemon.name) + ' down">Down</button>' +
+        "</span>" +
         '<span class="rank">' + row.rank + "</span>" +
         '<span class="mini">' + art + "</span>" +
         '<span class="who"><strong>' + esc(row.pokemon.name) + '</strong><span class="types inline">' + types + "</span></span>" +
@@ -887,6 +891,8 @@
     if (els.stage.contains(target)) {
       event.preventDefault();
       event.stopPropagation();
+      // The click that follows this press is only closing the sheet.
+      swiped = true;
     }
   }, true);
   window.addEventListener("scroll", function () {
@@ -938,9 +944,119 @@
   els.typeFilter.addEventListener("change", function () { if (view === "board") renderBoard(); });
   els.genFilter.addEventListener("change", function () { if (view === "board") renderBoard(); });
 
+  function shownIndex(id) {
+    var rows = shownRows();
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].pokemon.id === id) return i;
+    }
+    return -1;
+  }
+
+  function applyMove(id, toIndex) {
+    var rows = shownRows();
+    var from = shownIndex(id);
+    if (from < 0 || toIndex < 0 || toIndex >= rows.length || toIndex === from) return;
+    var passed = [];
+    var lo = Math.min(from, toIndex);
+    var hi = Math.max(from, toIndex);
+    for (var i = lo; i <= hi; i++) {
+      if (i !== from) passed.push(rows[i].pokemon.id);
+    }
+    ranker.movePast(id, passed, toIndex < from ? "above" : "below");
+    render();
+    var dir = toIndex < from ? "up" : "down";
+    var button = els.ledger.querySelector('li[data-id="' + id + '"] button[data-dir="' + dir + '"]');
+    if (button) button.focus({ preventScroll: true });
+  }
+
+  var rowDrag = null;
+  els.ledger.addEventListener("click", function (event) {
+    var button = event.target.closest("button[data-dir]");
+    if (!button || !els.ledger.contains(button)) return;
+    var li = button.closest("li");
+    if (!li) return;
+    var id = Number(li.getAttribute("data-id"));
+    var from = shownIndex(id);
+    if (from < 0) return;
+    applyMove(id, from + (button.getAttribute("data-dir") === "up" ? -1 : 1));
+  });
+  els.ledger.addEventListener("pointerdown", function (event) {
+    if (event.button !== 0 && event.pointerType === "mouse") return;
+    if (event.target.closest("button")) return;
+    var li = event.target.closest("li");
+    if (!li || !els.ledger.contains(li)) return;
+    rowDrag = {
+      id: Number(li.getAttribute("data-id")),
+      pointer: event.pointerId,
+      y: event.clientY,
+      active: false,
+    };
+    try {
+      li.setPointerCapture(event.pointerId);
+    } catch (error) {
+      /* The pointer can already be gone. */
+    }
+  });
+  function clearDragMarks() {
+    Array.prototype.forEach.call(els.ledger.children, function (item) {
+      item.classList.remove("drop-before", "drop-after", "dragging");
+    });
+  }
+  function indexAtPointer(clientY) {
+    var items = els.ledger.children;
+    for (var i = 0; i < items.length; i++) {
+      var rect = items[i].getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) return i;
+    }
+    return items.length - 1;
+  }
+  els.ledger.addEventListener("pointermove", function (event) {
+    if (!rowDrag || rowDrag.pointer !== event.pointerId) return;
+    if (!rowDrag.active) {
+      if (Math.abs(event.clientY - rowDrag.y) < 6) return;
+      rowDrag.active = true;
+    }
+    event.preventDefault();
+    clearDragMarks();
+    var dragging = els.ledger.querySelector('li[data-id="' + rowDrag.id + '"]');
+    if (dragging) dragging.classList.add("dragging");
+    var items = els.ledger.children;
+    if (!items.length) return;
+    var to = indexAtPointer(event.clientY);
+    if (to < items.length - 1) items[to].classList.add("drop-before");
+    else items[items.length - 1].classList.add("drop-after");
+  });
+  function finishRowDrag(event) {
+    if (!rowDrag || rowDrag.pointer !== event.pointerId) return;
+    var info = rowDrag;
+    rowDrag = null;
+    var moved = info.active;
+    var to = moved ? indexAtPointer(event.clientY) : -1;
+    clearDragMarks();
+    if (moved) applyMove(info.id, to);
+  }
+  els.ledger.addEventListener("pointerup", finishRowDrag);
+  els.ledger.addEventListener("pointercancel", function (event) {
+    if (!rowDrag || rowDrag.pointer !== event.pointerId) return;
+    rowDrag = null;
+    clearDragMarks();
+  });
+
   window.addEventListener("keydown", function (event) {
     var tag = event.target && event.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (els.ledger.contains(event.target)) {
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault();
+        var li = event.target.closest("li");
+        if (!li) return;
+        var id = Number(li.getAttribute("data-id"));
+        var from = shownIndex(id);
+        if (from < 0) return;
+        applyMove(id, from + (event.key === "ArrowUp" ? -1 : 1));
+      }
+      return;
+    }
     if (els.modal.hidden === false && event.key === "Escape") {
       els.modal.hidden = true;
       return;

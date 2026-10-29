@@ -75,6 +75,102 @@ describe("ranker session", () => {
     assert.equal(store.raw, "[]");
   });
 
+  it("puts the undone pair back on the duel instead of drawing a new one", () => {
+    const roster = Array.from({ length: 8 }, (_, i) => mon(i + 1, "M" + i, i % 2 ? "fire" : "water"));
+    let draws = 0;
+    const rng = () => {
+      draws += 1;
+      return 0.5;
+    };
+    const ranker = createRanker(roster, { storage: null, explore: 0, rng, now: () => 1, mlp: false });
+    const first = { a: ranker.getState().pair.a, b: ranker.getState().pair.b };
+    ranker.answer("a");
+    const second = { a: ranker.getState().pair.a, b: ranker.getState().pair.b };
+    assert.ok(second.a !== first.a || second.b !== first.b);
+    const drawsBeforeUndo = draws;
+    ranker.undoLast();
+    assert.equal(draws, drawsBeforeUndo);
+    assert.deepEqual(
+      { a: ranker.getState().pair.a, b: ranker.getState().pair.b },
+      first,
+    );
+    assert.equal(ranker.getState().history.length, 0);
+    ranker.answer("b");
+    const afterRestored = { a: ranker.getState().pair.a, b: ranker.getState().pair.b };
+    assert.ok(afterRestored.a !== first.a || afterRestored.b !== first.b);
+    ranker.answer("skip");
+    const skipped = ranker.getState().history.at(-1);
+    assert.equal(skipped.outcome, "skip");
+    const shownAfterSkip = { a: ranker.getState().pair.a, b: ranker.getState().pair.b };
+    assert.ok(shownAfterSkip.a !== skipped.a || shownAfterSkip.b !== skipped.b);
+    ranker.undoLast();
+    assert.deepEqual(
+      { a: ranker.getState().pair.a, b: ranker.getState().pair.b },
+      { a: skipped.a, b: skipped.b },
+    );
+    ranker.undoLast();
+    assert.deepEqual(
+      { a: ranker.getState().pair.a, b: ranker.getState().pair.b },
+      first,
+    );
+  });
+
+  it("records a rankings move as one comparison per species the row passes", () => {
+    const store = memory();
+    const roster = [mon(1, "A", "fire"), mon(2, "B", "water"), mon(3, "C", "grass"), mon(4, "D", "electric")];
+    const ranker = createRanker(roster, {
+      storage: store,
+      explore: 0,
+      rng: () => 0.5,
+      now: () => 10,
+      mlp: false,
+    });
+    const before = ranker.getState().rows.map((row) => row.pokemon.id);
+    assert.deepEqual(before, [1, 2, 3, 4]);
+    ranker.movePast(4, [2, 3], "above");
+    const history = ranker.getState().history;
+    assert.deepEqual(
+      history.map((entry) => [entry.a, entry.b, entry.outcome]),
+      [[4, 2, "a"], [4, 3, "a"]],
+    );
+    const rankOf = (state, id) => state.rows.find((row) => row.pokemon.id === id).rank;
+    assert.ok(rankOf(ranker.getState(), 4) < rankOf(ranker.getState(), 2));
+    assert.ok(rankOf(ranker.getState(), 4) < rankOf(ranker.getState(), 3));
+    const again = createRanker(roster, { storage: store, explore: 0, rng: () => 0.5, mlp: false });
+    assert.ok(rankOf(again.getState(), 4) < rankOf(again.getState(), 2));
+    assert.ok(rankOf(again.getState(), 4) < rankOf(again.getState(), 3));
+    again.movePast(1, [4], "below");
+    const last = again.getState().history.at(-1);
+    assert.deepEqual([last.a, last.b, last.outcome], [1, 4, "b"]);
+    assert.ok(rankOf(again.getState(), 4) < rankOf(again.getState(), 1));
+  });
+
+  it("repeats a move until a wide gap no longer snaps the row back", () => {
+    const roster = [mon(1, "A", "fire"), mon(2, "B", "fire")];
+    const history = [];
+    for (let k = 0; k < 8; k++) history.push({ a: 1, b: 2, outcome: "a", at: k + 1 });
+    const store = memory();
+    store.raw = JSON.stringify(history);
+    let clock = 100;
+    const ranker = createRanker(roster, {
+      storage: store,
+      explore: 0,
+      rng: () => 0.5,
+      now: () => clock++,
+      mlp: false,
+    });
+    const rankOf = (id) => ranker.getState().rows.find((row) => row.pokemon.id === id).rank;
+    assert.ok(rankOf(1) < rankOf(2));
+    ranker.movePast(2, [1], "above");
+    assert.ok(rankOf(2) < rankOf(1));
+    const added = ranker.getState().history.slice(8);
+    assert.ok(added.length > 1);
+    assert.ok(added.every((entry) => entry.a === 2 && entry.b === 1 && entry.outcome === "a"));
+    const reloaded = createRanker(roster, { storage: store, explore: 0, rng: () => 0.5, mlp: false });
+    const again = (id) => reloaded.getState().rows.find((row) => row.pokemon.id === id).rank;
+    assert.ok(again(2) < again(1));
+  });
+
   it("shows a chosen pair until that matchup is answered", () => {
     const ranker = createRanker(
       [mon(1, "A", "fire"), mon(2, "B", "water"), mon(3, "C", "grass")],
