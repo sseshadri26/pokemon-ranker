@@ -62,10 +62,7 @@
         <button type="button" id="view-history">History</button>
         <button type="button" id="view-board">Rankings</button>
         <button type="button" id="view-model">Model</button>
-        <button type="button" id="export">Export</button>
-        <button type="button" id="import">Import</button>
-        <button type="button" id="reset">Reset</button>
-        <input id="import-file" type="file" accept="application/json,.json" hidden aria-label="Import history">
+        <button type="button" id="data-menu" aria-expanded="false" aria-controls="data-panel" aria-haspopup="dialog">Data</button>
       </nav>
     </header>
     <p class="notice" id="notice" role="status" hidden>
@@ -193,6 +190,20 @@
         <span class="pad-btn round"></span>
       </div>
       <div class="home-bar"></div>
+    </div>
+  </div>
+  <div class="data-panel" id="data-panel" role="dialog" aria-labelledby="data-title" hidden>
+    <div class="data-sheet">
+      <div class="data-head">
+        <h2 id="data-title">Data</h2>
+        <button type="button" id="data-close">Close</button>
+      </div>
+      <div class="data-actions">
+        <button type="button" id="export">Export</button>
+        <button type="button" id="import">Import</button>
+        <button type="button" class="danger" id="reset">Reset</button>
+      </div>
+      <input id="import-file" type="file" accept="application/json,.json" hidden aria-label="Import history">
     </div>
   </div>
   <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="reset-title" hidden>

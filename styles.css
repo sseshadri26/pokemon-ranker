@@ -206,7 +206,7 @@ nav button, .ghost, .texty, .modal button {
   border-radius: 999px;
   padding: 8px 14px;
 }
-nav button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+nav button.on, nav button.open { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .dex-switch {
   display: grid;
   gap: 4px;
@@ -276,7 +276,8 @@ nav button.on { background: var(--ink); color: var(--bg); border-color: var(--in
   text-align: left;
   border-radius: 28px;
 }
-.pick:focus-visible, nav button:focus-visible, .ghost:focus-visible, .texty:focus-visible {
+.pick:focus-visible, nav button:focus-visible, .ghost:focus-visible, .texty:focus-visible,
+.data-panel button:focus-visible {
   outline: 2px solid var(--coral);
   outline-offset: 3px;
 }
@@ -599,6 +600,7 @@ kbd {
 .modal {
   position: fixed;
   inset: 0;
+  z-index: 40;
   background: rgba(8, 10, 7, 0.72);
   display: grid;
   place-items: center;
@@ -615,6 +617,54 @@ kbd {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .modal button { color: var(--card-ink); border-color: rgba(29, 25, 20, 0.2); }
 .modal .danger { background: var(--coral); color: white; border-color: var(--coral); }
+/* Floats on the desk, outside the device, so a clipped screen cannot hide it. */
+.data-panel {
+  position: fixed;
+  z-index: 30;
+  width: min(220px, calc(100vw - 16px));
+  margin: 0;
+}
+.data-sheet {
+  background: var(--field);
+  color: var(--field-ink);
+  border: 1px solid color-mix(in srgb, var(--field-ink) 28%, transparent);
+  border-radius: 18px;
+  padding: 12px 12px 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.38);
+}
+.data-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.data-panel h2,
+body.view-duel .data-panel h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--field-ink);
+}
+#data-close {
+  border: 0;
+  background: transparent;
+  color: var(--field-ink);
+  padding: 4px 2px;
+}
+.data-actions { display: grid; gap: 8px; }
+.data-actions button {
+  border: 1px solid color-mix(in srgb, var(--field-ink) 28%, transparent);
+  background: color-mix(in srgb, var(--field-ink) 6%, transparent);
+  color: var(--field-ink);
+  border-radius: 999px;
+  padding: 8px 14px;
+}
+.data-actions .danger {
+  border-color: var(--coral);
+  background: color-mix(in srgb, var(--coral) 18%, var(--field));
+  color: var(--field-ink);
+}
 .sr-only {
   position: absolute;
   width: 1px;
@@ -908,6 +958,11 @@ html[data-dex="4"] .duel, html[data-dex="4"] .board, html[data-dex="4"] .sheet, 
   padding: 14px;
 }
 html[data-dex="4"] .notice { color: #1c2430; }
+html[data-dex="4"] nav button.open {
+  background: #e23d4a;
+  color: #fffaf3;
+  border-color: #e23d4a;
+}
 
 /* Unova: a black glass slab. The screen is the device. */
 html[data-dex="5"] {

@@ -36,7 +36,7 @@ The main form fills the middle of the picture. A Mega or Gigantamax form is smal
 
 **Model** names the predictor: hierarchical Bradley–Terry, strength `s = x·w + b`, the normal priors on the weights and the species offsets, and the alternating Newton fit. Under that it lists every trait category in `x` — type, generation, color, shape, habitat, egg group, legendary, mythical, baby, evolution stage, and starter — and the learned weight and Laplace standard deviation of each column.
 
-**Export** downloads the full answer history as JSON. **Import** replaces the current history. **Reset** clears it. History lives in `localStorage` under `favordex.history.v1`. Skips are kept in that log so they can be undone and round-tripped, and they do not affect scores.
+**Data** opens Export, Import, and Reset. **Export** downloads the full answer history as JSON. **Import** replaces the current history. **Reset** clears it. History lives in `localStorage` under `favordex.history.v1`. Skips are kept in that log so they can be undone and round-tripped, and they do not affect scores.
 
 ## The model
 

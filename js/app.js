@@ -841,6 +841,58 @@
     ranker.setNotice(null);
     renderHeader();
   });
+  var dataMenu = document.getElementById("data-menu");
+  var dataPanel = document.getElementById("data-panel");
+
+  function placeDataPanel() {
+    var rect = dataMenu.getBoundingClientRect();
+    var margin = 8;
+    var width = dataPanel.offsetWidth;
+    var height = dataPanel.offsetHeight;
+    var left = rect.right - width;
+    if (left < margin) left = margin;
+    if (left + width > window.innerWidth - margin) left = Math.max(margin, window.innerWidth - width - margin);
+    var top = rect.bottom + 8;
+    if (top + height > window.innerHeight - margin) {
+      var above = rect.top - height - 8;
+      top = above >= margin ? above : Math.max(margin, window.innerHeight - height - margin);
+    }
+    dataPanel.style.left = Math.round(left) + "px";
+    dataPanel.style.top = Math.round(top) + "px";
+  }
+
+  function setDataOpen(open) {
+    var wasInside = dataPanel.contains(document.activeElement);
+    dataPanel.hidden = !open;
+    dataMenu.setAttribute("aria-expanded", open ? "true" : "false");
+    dataMenu.classList.toggle("open", open);
+    if (open) placeDataPanel();
+    else if (wasInside) dataMenu.focus({ preventScroll: true });
+  }
+
+  dataMenu.addEventListener("click", function (event) {
+    var open = dataPanel.hidden;
+    setDataOpen(open);
+    if (open && event.detail === 0) document.getElementById("export").focus({ preventScroll: true });
+  });
+  document.getElementById("data-close").addEventListener("click", function () {
+    setDataOpen(false);
+  });
+  document.addEventListener("pointerdown", function (event) {
+    if (dataPanel.hidden) return;
+    var target = event.target;
+    if (dataPanel.contains(target) || dataMenu.contains(target)) return;
+    if (els.modal.hidden === false && els.modal.contains(target)) return;
+    setDataOpen(false);
+    if (els.stage.contains(target)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
+  window.addEventListener("scroll", function () {
+    if (!dataPanel.hidden) placeDataPanel();
+  }, true);
+
   document.getElementById("export").addEventListener("click", function () {
     var blob = new Blob([ranker.exportText()], { type: "application/json" });
     var url = URL.createObjectURL(blob);
@@ -893,6 +945,12 @@
       els.modal.hidden = true;
       return;
     }
+    if (dataPanel.hidden === false && event.key === "Escape") {
+      event.preventDefault();
+      setDataOpen(false);
+      return;
+    }
+    if (dataPanel.hidden === false && dataPanel.contains(event.target)) return;
     if (event.key === "ArrowLeft") {
       event.preventDefault();
       vote("a");
@@ -962,8 +1020,12 @@
     } catch (error) {
       /* The look still changes for this visit. */
     }
+    if (!dataPanel.hidden) placeDataPanel();
   });
 
-  window.addEventListener("resize", fitPortraits);
+  window.addEventListener("resize", function () {
+    fitPortraits();
+    if (!dataPanel.hidden) placeDataPanel();
+  });
   render();
 })();
