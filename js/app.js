@@ -135,6 +135,24 @@
     release();
   }
 
+  function reviseHistory(index, outcome) {
+    if (uiLock) return;
+    var entry = state().history[index];
+    if (!entry || entry.outcome === outcome) return;
+    uiLock = true;
+    ranker.editOutcome(index, outcome);
+    render();
+    release();
+  }
+
+  function removeHistory(index) {
+    if (uiLock) return;
+    uiLock = true;
+    ranker.deleteEntry(index);
+    render();
+    release();
+  }
+
   function formsOf(mon) {
     if (mon.forms && mon.forms.length > 0) return mon.forms;
     return [{ name: mon.name, art: mon.art, types: mon.types, kind: "default", pixel: false }];
@@ -704,24 +722,40 @@
     return outcome;
   }
 
+  function outcomeButton(outcome, current, label, testId) {
+    var pressed = current === outcome ? "true" : "false";
+    return '<button type="button" data-outcome="' + outcome + '" data-testid="' + testId +
+      '" aria-pressed="' + pressed + '">' + label + "</button>";
+  }
+
+  function voteControls(entry, leftName, rightName) {
+    return '<div class="vote-edit" role="group" aria-label="' +
+      esc("Change vote, " + leftName + " vs " + rightName) + '">' +
+      outcomeButton("a", entry.outcome, 'Pick left <span class="side-name">' + esc(leftName) + "</span>", "history-pick-left") +
+      outcomeButton("b", entry.outcome, 'Pick right <span class="side-name">' + esc(rightName) + "</span>", "history-pick-right") +
+      outcomeButton("tie", entry.outcome, "Tie", "history-tie") +
+      '<button type="button" data-action="delete" data-testid="history-delete" aria-label="' +
+      esc("Delete " + leftName + " vs " + rightName) + '">Delete</button></div>';
+  }
+
   function renderHistory() {
     var history = state().history;
     var byId = state().byId;
     els.historyCount.textContent = history.length.toLocaleString() + " " + (history.length === 1 ? "answer" : "answers");
     els.historyEmpty.hidden = history.length !== 0;
-    var rows = history.slice().reverse();
-    els.matchLog.innerHTML = rows.map(function (entry) {
+    els.matchLog.innerHTML = history.map(function (entry, index) {
       var left = byId.get(entry.a);
       var right = byId.get(entry.b);
       var leftName = left ? left.name : "#" + entry.a;
       var rightName = right ? right.name : "#" + entry.b;
       var when = new Date(entry.at).toLocaleString();
-      return "<li>" +
+      return '<li data-index="' + index + '">' +
         '<span class="when">' + esc(when) + "</span>" +
         '<span class="bout">' + esc(leftName) + " vs " + esc(rightName) + "</span>" +
         '<span class="result">' + esc(outcomeLabel(entry.outcome, leftName, rightName)) + "</span>" +
+        voteControls(entry, leftName, rightName) +
         "</li>";
-    }).join("");
+    }).reverse().join("");
   }
 
   function votePhrase(mon) {
@@ -839,6 +873,20 @@
   document.getElementById("tie").addEventListener("click", function () { vote("tie"); });
   document.getElementById("skip").addEventListener("click", function () { vote("skip"); });
   document.getElementById("undo").addEventListener("click", undo);
+  els.matchLog.addEventListener("click", function (event) {
+    var button = event.target.closest("button");
+    if (!button || !els.matchLog.contains(button)) return;
+    var row = button.closest("li");
+    if (!row) return;
+    var index = Number(row.getAttribute("data-index"));
+    if (!Number.isInteger(index)) return;
+    if (button.getAttribute("data-action") === "delete") {
+      removeHistory(index);
+      return;
+    }
+    var outcome = button.getAttribute("data-outcome");
+    if (outcome === "a" || outcome === "b" || outcome === "tie") reviseHistory(index, outcome);
+  });
   els.cardA.addEventListener("click", function (event) { onCardClick(event, "a"); });
   els.cardB.addEventListener("click", function (event) { onCardClick(event, "b"); });
   document.getElementById("notice-dismiss").addEventListener("click", function () {
@@ -1045,6 +1093,10 @@
   window.addEventListener("keydown", function (event) {
     var tag = event.target && event.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if ((view === "history" || els.history.contains(event.target)) &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "ArrowUp" || event.key === "ArrowDown")) {
+      return;
+    }
     if (els.ledger.contains(event.target)) {
       if (event.key === "ArrowUp" || event.key === "ArrowDown") {
         event.preventDefault();

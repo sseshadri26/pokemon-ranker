@@ -240,6 +240,171 @@ describe("ranker session", () => {
     assert.equal(ranker.getState().model.comparisons, 24);
     assert.ok(fire.sd < 0.7);
   });
+
+  it("changes an older vote in place so the stored log and the fit use the new outcome", () => {
+    const roster = [mon(1, "A", "fire"), mon(2, "B", "water"), mon(3, "C", "grass")];
+    const store = memory();
+    store.raw = JSON.stringify([
+      { a: 1, b: 2, outcome: "a", at: 1 },
+      { a: 2, b: 3, outcome: "skip", at: 2 },
+      { a: 3, b: 1, outcome: "b", at: 3 },
+    ]);
+    const ranker = createRanker(roster, {
+      storage: store,
+      explore: 0,
+      rng: () => 0.5,
+      mlp: false,
+      maxIter: 40,
+    });
+    const rankOf = (id) => ranker.getState().rows.find((row) => row.pokemon.id === id).rank;
+    const gamesOf = (id) => ranker.getState().rows.find((row) => row.pokemon.id === id).games;
+    assert.ok(rankOf(1) < rankOf(2));
+    assert.equal(ranker.getState().summary.matchups, 2);
+    assert.equal(gamesOf(3), 1);
+
+    ranker.editOutcome(0, "b");
+    const stored = JSON.parse(store.raw);
+    assert.deepEqual(stored, [
+      { a: 1, b: 2, outcome: "b", at: 1 },
+      { a: 2, b: 3, outcome: "skip", at: 2 },
+      { a: 3, b: 1, outcome: "b", at: 3 },
+    ]);
+    assert.deepEqual(ranker.getState().history, stored);
+    assert.ok(rankOf(2) < rankOf(1));
+    assert.equal(ranker.getState().summary.matchups, 2);
+    const exported = F.parseHistory(ranker.exportText());
+    assert.equal(exported[0].outcome, "b");
+    assert.equal(exported[0].at, 1);
+    assert.equal(exported[0].a, 1);
+    assert.equal(exported[0].b, 2);
+    assert.deepEqual(
+      F.ratedComparisons(exported).map((entry) => [entry.a, entry.b, entry.outcome]),
+      [[1, 2, "b"], [3, 1, "b"]],
+    );
+
+    assert.equal(gamesOf(2), 1);
+    ranker.editOutcome(1, "tie");
+    assert.equal(ranker.getState().history[1].outcome, "tie");
+    assert.equal(ranker.getState().history[1].at, 2);
+    assert.equal(ranker.getState().history[1].a, 2);
+    assert.equal(ranker.getState().history[1].b, 3);
+    assert.equal(ranker.getState().summary.matchups, 3);
+    assert.equal(gamesOf(2), 2);
+    assert.equal(F.ratedComparisons(F.parseHistory(ranker.exportText())).length, 3);
+
+    ranker.editOutcome(0, "skip");
+    ranker.editOutcome(0, "maybe");
+    assert.equal(ranker.getState().history[0].outcome, "b");
+    assert.equal(JSON.parse(store.raw)[0].outcome, "b");
+
+    ranker.queuePair(1, 3);
+    ranker.editOutcome(2, "tie");
+    assert.deepEqual([ranker.getState().pair.a, ranker.getState().pair.b], [1, 3]);
+    assert.equal(ranker.getState().history[2].at, 3);
+    assert.equal(ranker.getState().history[2].outcome, "tie");
+  });
+
+  it("deletes a middle vote and leaves a pinned duel where it is", () => {
+    const roster = [mon(1, "A", "fire"), mon(2, "B", "water"), mon(3, "C", "grass"), mon(4, "D", "electric")];
+    const store = memory();
+    store.raw = JSON.stringify([
+      { a: 1, b: 2, outcome: "a", at: 1 },
+      { a: 2, b: 3, outcome: "tie", at: 2 },
+      { a: 3, b: 4, outcome: "b", at: 3 },
+      { a: 4, b: 1, outcome: "a", at: 4 },
+    ]);
+    let draws = 0;
+    const ranker = createRanker(roster, {
+      storage: store,
+      explore: 0,
+      rng: () => {
+        draws += 1;
+        return 0.5;
+      },
+      mlp: false,
+    });
+    const shown = { a: ranker.getState().pair.a, b: ranker.getState().pair.b };
+    const drawsAfterOpen = draws;
+    ranker.deleteEntry(1);
+    assert.equal(draws, drawsAfterOpen);
+    assert.deepEqual(
+      ranker.getState().history.map((entry) => [entry.a, entry.b, entry.outcome, entry.at]),
+      [
+        [1, 2, "a", 1],
+        [3, 4, "b", 3],
+        [4, 1, "a", 4],
+      ],
+    );
+    assert.deepEqual(JSON.parse(store.raw).map((entry) => entry.at), [1, 3, 4]);
+    assert.deepEqual({ a: ranker.getState().pair.a, b: ranker.getState().pair.b }, shown);
+    assert.equal(ranker.getState().summary.matchups, 3);
+
+    ranker.queuePair(2, 4);
+    const pinned = { a: ranker.getState().pair.a, b: ranker.getState().pair.b };
+    assert.deepEqual(pinned, { a: 2, b: 4 });
+    const drawsAtPin = draws;
+    ranker.deleteEntry(0);
+    assert.equal(draws, drawsAtPin);
+    assert.deepEqual(
+      ranker.getState().history.map((entry) => [entry.a, entry.b, entry.at]),
+      [
+        [3, 4, 3],
+        [4, 1, 4],
+      ],
+    );
+    assert.deepEqual({ a: ranker.getState().pair.a, b: ranker.getState().pair.b }, pinned);
+  });
+
+  it("deletes the latest vote and puts that pair back on the duel", () => {
+    const roster = Array.from({ length: 8 }, (_, i) => mon(i + 1, "M" + i, i % 2 ? "fire" : "water"));
+    const seeded = [
+      { a: 1, b: 2, outcome: "a", at: 11 },
+      { a: 3, b: 4, outcome: "tie", at: 12 },
+      { a: 5, b: 6, outcome: "b", at: 13 },
+    ];
+    const leftStore = memory();
+    const rightStore = memory();
+    leftStore.raw = JSON.stringify(seeded);
+    rightStore.raw = JSON.stringify(seeded);
+    let draws = 0;
+    const options = {
+      explore: 0,
+      rng: () => {
+        draws += 1;
+        return 0.37;
+      },
+      mlp: false,
+    };
+    const ranker = createRanker(roster, { ...options, storage: leftStore });
+    const undone = createRanker(roster, {
+      ...options,
+      storage: rightStore,
+      rng: () => 0.37,
+    });
+    const latest = ranker.getState().history.at(-1);
+    assert.deepEqual([latest.a, latest.b, latest.outcome], [5, 6, "b"]);
+    const drawsBefore = draws;
+    ranker.deleteEntry(ranker.getState().history.length - 1);
+    undone.undoLast();
+    assert.equal(draws, drawsBefore);
+    assert.deepEqual(
+      ranker.getState().history.map((entry) => [entry.a, entry.b, entry.outcome, entry.at]),
+      [
+        [1, 2, "a", 11],
+        [3, 4, "tie", 12],
+      ],
+    );
+    assert.deepEqual(JSON.parse(leftStore.raw).map((entry) => entry.at), [11, 12]);
+    assert.deepEqual(
+      { a: ranker.getState().pair.a, b: ranker.getState().pair.b },
+      { a: latest.a, b: latest.b },
+    );
+    assert.deepEqual(ranker.getState().history, undone.getState().history);
+    assert.deepEqual(
+      [ranker.getState().pair.a, ranker.getState().pair.b],
+      [undone.getState().pair.a, undone.getState().pair.b],
+    );
+  });
 });
 
 describe("page files", () => {

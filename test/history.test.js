@@ -62,4 +62,61 @@ describe("answer history", () => {
     assert.throws(() => F.parseHistory('{"history":[{"a":1,"b":1,"outcome":"tie"}]}'), /itself/);
     assert.throws(() => F.parseHistory('{"history":[{"a":1,"b":2,"outcome":"maybe"}]}'), /outcome/);
   });
+
+  it("refits an in-place outcome change, including a former skip, and a removed middle entry", () => {
+    const history = [
+      { a: 1, b: 2, outcome: "a", at: 1 },
+      { a: 2, b: 3, outcome: "tie", at: 2 },
+      { a: 3, b: 1, outcome: "skip", at: 3 },
+      { a: 1, b: 3, outcome: "b", at: 4 },
+    ];
+    const changed = history.map((entry, index) => (
+      index === 0 ? { a: entry.a, b: entry.b, outcome: "b", at: entry.at } : entry
+    ));
+    assert.deepEqual(
+      changed.map((entry) => [entry.a, entry.b, entry.outcome, entry.at]),
+      [
+        [1, 2, "b", 1],
+        [2, 3, "tie", 2],
+        [3, 1, "skip", 3],
+        [1, 3, "b", 4],
+      ],
+    );
+    const design = F.buildDesignMatrix(roster, F.coreExtractors);
+    const fitBefore = F.fitBradleyTerry(design, F.ratedComparisons(history));
+    const fitChanged = F.fitBradleyTerry(design, F.ratedComparisons(changed));
+    assert.equal(fitBefore.comparisons, 3);
+    assert.equal(fitChanged.comparisons, 3);
+    assert.deepEqual(
+      F.ratedComparisons(changed).map((entry) => [entry.a, entry.b, entry.outcome]),
+      [
+        [1, 2, "b"],
+        [2, 3, "tie"],
+        [1, 3, "b"],
+      ],
+    );
+    assert.ok(Math.abs(fitBefore.strength[0] - fitChanged.strength[0]) > 1e-3);
+
+    const promoted = changed.map((entry, index) => (
+      index === 2 ? { a: entry.a, b: entry.b, outcome: "tie", at: entry.at } : entry
+    ));
+    assert.equal(promoted[2].at, 3);
+    const fitPromoted = F.fitBradleyTerry(design, F.ratedComparisons(promoted));
+    assert.equal(fitPromoted.comparisons, 4);
+    assert.equal(F.ratedComparisons(promoted).some((entry) => entry.outcome === "skip"), false);
+
+    const removed = [changed[0], changed[2], changed[3]];
+    assert.deepEqual(removed.map((entry) => [entry.a, entry.outcome, entry.at]), [
+      [1, "b", 1],
+      [3, "skip", 3],
+      [1, "b", 4],
+    ]);
+    const fitRemoved = F.fitBradleyTerry(design, F.ratedComparisons(removed));
+    const direct = F.fitBradleyTerry(design, [
+      { a: 1, b: 2, outcome: "b" },
+      { a: 1, b: 3, outcome: "b" },
+    ]);
+    assert.equal(fitRemoved.comparisons, 2);
+    for (let i = 0; i < 3; i++) closeTo(fitRemoved.strength[i], direct.strength[i], 6);
+  });
 });

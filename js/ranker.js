@@ -401,6 +401,32 @@
         release();
         return state;
       },
+      editOutcome: function (index, outcome) {
+        if (lock) return state;
+        if (!Number.isInteger(index) || index < 0 || index >= history.length) return state;
+        if (outcome !== "a" && outcome !== "b" && outcome !== "tie") return state;
+        var current = history[index];
+        if (current.outcome === outcome) return state;
+        lock = true;
+        var next = history.slice();
+        next[index] = { a: current.a, b: current.b, outcome: outcome, at: current.at };
+        commit(next);
+        release();
+        return state;
+      },
+      deleteEntry: function (index) {
+        if (lock) return state;
+        if (!Number.isInteger(index) || index < 0 || index >= history.length) return state;
+        lock = true;
+        var removed = history[index];
+        // The latest row is the one Undo would take back, so that pair returns to the duel.
+        // An older row leaves a queued matchup in place, and otherwise keeps whatever is on screen.
+        if (index === history.length - 1) forced = { a: removed.a, b: removed.b };
+        else if (!forced && state.pair) forced = { a: state.pair.a, b: state.pair.b };
+        commit(history.slice(0, index).concat(history.slice(index + 1)));
+        release();
+        return state;
+      },
       movePast: function (id, passedIds, direction) {
         if (lock || (direction !== "above" && direction !== "below")) return state;
         if (!byId.has(id) || !Array.isArray(passedIds)) return state;
