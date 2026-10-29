@@ -34,6 +34,7 @@
     model: document.getElementById("model"),
     modelFacts: document.getElementById("model-facts"),
     modelCategories: document.getElementById("model-categories"),
+    modelNetwork: document.getElementById("model-network"),
     noDuel: document.getElementById("no-duel"),
     live: document.getElementById("versus-live"),
     stage: document.getElementById("stage"),
@@ -454,7 +455,7 @@
     if (categoryId === "stats") {
       return {
         hp: "HP", attack: "Attack", defense: "Defense",
-        "special-attack": "Sp. Atk", "special-defense": "Sp. Def", speed: "Speed",
+        "special-attack": "Sp. Atk", "special-defense": "Sp. Def", speed: "Speed", bst: "BST",
       }[value] || value;
     }
     if (categoryId === "body") return value === "height" ? "Height" : "Weight";
@@ -472,20 +473,34 @@
 
   function renderModel() {
     var model = state().model;
+    var network = model.network;
+    var layers = network && network.layers ? network.layers : [];
     var peak = 0.5;
+    function bump(value) {
+      if (Number.isFinite(value)) peak = Math.max(peak, Math.abs(value));
+    }
     model.categories.forEach(function (category) {
-      category.weights.forEach(function (row) {
-        peak = Math.max(peak, Math.abs(row.weight));
+      category.weights.forEach(function (row) { bump(row.weight); });
+    });
+    layers.forEach(function (layer) {
+      (layer.units || []).forEach(function (unit) {
+        bump(unit.bias);
+        (unit.weights || []).forEach(function (row) { bump(row.weight); });
       });
     });
-    if (model.network) {
-      model.network.units.forEach(function (unit) {
-        peak = Math.max(peak, Math.abs(unit.output), Math.abs(unit.bias));
-        unit.weights.forEach(function (row) { peak = Math.max(peak, Math.abs(row.weight)); });
-      });
+    if (network && network.output) {
+      (network.output.weights || []).forEach(function (row) { bump(row.weight); });
     }
     function fact(term, value) {
       return "<div><dt>" + esc(term) + "</dt><dd>" + value + "</dd></div>";
+    }
+    var networkFact = "";
+    if (network) {
+      var hidden = network.hidden || [];
+      networkFact = fact(
+        "Network",
+        String(hidden[0] || 0) + " then " + String(hidden[1] || 0) + " tanh units, then EV"
+      );
     }
     els.modelFacts.innerHTML =
       fact("Family", esc(model.family)) +
@@ -496,17 +511,29 @@
       fact("Answers in the fit", model.comparisons.toLocaleString() + " (skips left out)") +
       fact("Newton steps", String(model.iterations) + (model.converged ? ", converged" : ", still moving")) +
       fact("Columns in x", model.columns.toLocaleString()) +
-      (model.network ? fact("Hidden layer", model.network.hidden + " tanh units on stats, BST, size, and catch rate") : "");
+      networkFact;
     function weightRow(name, weight, sd) {
-      var tone = weight > 0.0005 ? "up" : weight < -0.0005 ? "down" : "flat";
-      var share = tone === "flat" ? 0 : Math.min(50, (Math.abs(weight) / peak) * 50);
-      var edge = weight >= 0 ? "left:50%" : "right:50%";
+      var w = Number.isFinite(weight) ? weight : 0;
+      var s = Number.isFinite(sd) ? sd : 0;
+      var tone = w > 0.0005 ? "up" : w < -0.0005 ? "down" : "flat";
+      var share = tone === "flat" ? 0 : Math.min(50, (Math.abs(w) / peak) * 50);
+      var edge = w >= 0 ? "left:50%" : "right:50%";
       return "<li>" +
         '<span class="trait-name">' + esc(name) + "</span>" +
-        '<span class="track" title="' + esc(formatScore(weight) + " " + formatSd(sd)) + '">' +
+        '<span class="track" title="' + esc(formatScore(w) + " " + formatSd(s)) + '">' +
         '<i class="' + tone + '" style="' + edge + ";width:" + share.toFixed(2) + '%"></i></span>' +
-        '<span class="trait-num ' + tone + '">' + formatScore(weight) + "</span>" +
-        '<span class="trait-sd">' + formatSd(sd) + "</span></li>";
+        '<span class="trait-num ' + tone + '">' + formatScore(w) + "</span>" +
+        '<span class="trait-sd">' + formatSd(s) + "</span></li>";
+    }
+    function featureLabel(name) {
+      var c, w;
+      for (c = 0; c < model.categories.length; c++) {
+        var category = model.categories[c];
+        for (w = 0; w < category.weights.length; w++) {
+          if (category.weights[w].key === name) return traitLabel(category.id, name);
+        }
+      }
+      return name;
     }
     els.modelCategories.innerHTML = model.categories.map(function (category) {
       var rows = category.weights.length === 0
@@ -521,20 +548,90 @@
         (category.weights.length === 1 ? " column" : " columns") + "</p>" +
         rows + "</section>";
     }).join("");
-    if (model.network) {
-      els.modelCategories.innerHTML += '<section class="trait" data-category="network">' +
-        '<h3>Hidden layer <span class="encoding">tanh</span></h3>' +
-        "<p>Each unit reads the scaled stats, base stat total, height, weight, and catch rate, squashes that sum with tanh, and adds it to the strength. " +
-        "Base stat total is the sum of the six stats, so it is an input here instead of a second linear column. " +
-        "The bend is how one stat can matter more once another is high.</p>" +
-        model.network.units.map(function (unit, index) {
-          return "<h4>Unit " + (index + 1) + "</h4><ol>" +
-            weightRow("Output", unit.output, unit.outputSd) +
-            weightRow("Bias", unit.bias, unit.biasSd) +
-            unit.weights.map(function (row) { return weightRow(row.name, row.weight, row.sd); }).join("") +
-            "</ol>";
-        }).join("") + "</section>";
+    if (!els.modelNetwork) return;
+    if (!network || !layers.length) {
+      els.modelNetwork.innerHTML = "";
+      return;
     }
+    var inputs = network.inputs || [];
+    var inputCol = '<section class="net-col" data-category="inputs">' +
+      '<h3>Inputs <span class="encoding">x</span></h3>' +
+      "<p>" + inputs.length + " columns. These are the inputs to both the linear weights and the network.</p>" +
+      '<ol class="net-inputs">' + inputs.map(function (name) {
+        return "<li>" + esc(featureLabel(name)) + "</li>";
+      }).join("") + "</ol></section>";
+    function columnNames(count, prefix) {
+      var names = [];
+      var i;
+      for (i = 0; i < count; i++) names.push(prefix + " · " + (i + 1));
+      return names;
+    }
+    function fullIncoming(matrix, unitIndex, names, sd) {
+      if (!matrix || !names || !names.length) return null;
+      var width = names.length;
+      if (matrix.length < (unitIndex + 1) * width) return null;
+      var rows = [];
+      var base = unitIndex * width;
+      var i;
+      for (i = 0; i < width; i++) {
+        rows.push({ name: names[i], weight: matrix[base + i], sd: sd });
+      }
+      rows.sort(function (a, b) {
+        var diff = Math.abs(b.weight) - Math.abs(a.weight);
+        if (diff) return diff;
+        if (a.name < b.name) return -1;
+        if (a.name > b.name) return 1;
+        return 0;
+      });
+      return rows;
+    }
+    var layerCols = layers.map(function (layer, layerIndex) {
+      var units = layer.units || [];
+      var nodes = units.map(function (unit, index) {
+        var incomingNames = null;
+        var matrix = null;
+        if (layerIndex === 0) {
+          matrix = network.W1;
+          incomingNames = inputs;
+        } else if (layerIndex === 1 && layers[0] && layers[0].units) {
+          matrix = network.W2;
+          incomingNames = columnNames(layers[0].units.length, "Hidden 1");
+        }
+        var weights = fullIncoming(matrix, index, incomingNames, unit.biasSd) || unit.weights || [];
+        var rows = weightRow("Bias", unit.bias, unit.biasSd) +
+          weights.map(function (row) {
+            return weightRow(featureLabel(row.name), row.weight, row.sd);
+          }).join("");
+        var more = "";
+        if (unit.fanIn > weights.length) {
+          more = '<p class="net-more">Reads all ' + unit.fanIn +
+            " inputs. Showing the " + weights.length + " strongest incoming weights.</p>";
+        }
+        return '<div class="net-node trait" data-unit="' + (index + 1) + '">' +
+          "<h4>Unit " + (index + 1) + "</h4>" +
+          "<ol>" + rows + "</ol>" + more + "</div>";
+      }).join("");
+      return '<section class="net-col" data-layer="' + esc(layer.name) + '">' +
+        "<h3>" + esc(layer.name) + ' <span class="encoding">' + esc(layer.activation) + "</span></h3>" +
+        "<p>" + units.length + " " + esc(layer.activation) +
+        " units. Each adds a bias, weights its inputs, then squashes with " +
+        esc(layer.activation) + ".</p>" +
+        nodes + "</section>";
+    }).join("");
+    var output = network.output || { name: "EV", weights: [] };
+    var evNames = layers[1] && layers[1].units ? columnNames(layers[1].units.length, "Hidden 2") : [];
+    var evSd = layers[1] && layers[1].units && layers[1].units[0] && Number.isFinite(layers[1].units[0].biasSd)
+      ? layers[1].units[0].biasSd
+      : 0;
+    var evWeights = fullIncoming(network.v, 0, evNames, evSd) || output.weights || [];
+    var evRows = evWeights.map(function (row) {
+      return weightRow(featureLabel(row.name), row.weight, row.sd);
+    }).join("");
+    var evCol = '<section class="net-col" data-layer="EV" data-category="ev">' +
+      "<h3>" + esc(output.name || "EV") + ' <span class="encoding">readout</span></h3>' +
+      "<p>EV(x) is this readout of Hidden 2. Strength is s = x·w + EV(x) + b.</p>" +
+      '<div class="trait"><ol>' + evRows + "</ol></div></section>";
+    els.modelNetwork.innerHTML = inputCol + layerCols + evCol;
   }
 
   function render() {

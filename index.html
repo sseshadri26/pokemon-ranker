@@ -144,7 +144,12 @@
         </p>
       </div>
       <dl class="facts" id="model-facts"></dl>
+      <h2 class="sheet-sub">Linear weights</h2>
+      <p class="sheet-note">Every trait category is a block of columns in x. Each column has its own learned weight.</p>
       <div class="traits" id="model-categories"></div>
+      <h2 class="sheet-sub">Network</h2>
+      <p class="sheet-note">Inputs are those same columns. Hidden 1 is 8 tanh units, each with a bias and incoming weights. Hidden 2 is 4 tanh units. EV is the readout. Strength is s = x·w + EV(x) + b.</p>
+      <div class="net-flow" id="model-network"></div>
     </section>
     <section class="history" id="history" hidden>
       <p class="shown" id="history-count"></p>

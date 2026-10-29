@@ -154,11 +154,17 @@ describe("page files", () => {
     assert.match(html, /src="js\/app\.js"/);
     assert.match(html, /id="view-model"/);
     assert.match(html, /id="model"/);
+    assert.match(html, /id="model-network"/);
     assert.match(html, /Hierarchical Bradley–Terry/);
+    const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+    assert.match(css, /body:not\(\.view-duel\)/);
+    assert.match(css, /body\.view-duel[\s\S]*overflow:\s*hidden/);
     assert.match(html, /href="favicon\.svg"/);
     assert.equal(html.includes("/src/"), false);
     assert.equal(html.includes("type=\"module\""), false);
     const app = fs.readFileSync(path.join(__dirname, "..", "js", "app.js"), "utf8");
+    assert.match(app, /network\.layers/);
+    assert.equal(app.includes("network.units"), false);
     assert.match(app, /return "artwork\/" \+ file/);
     assert.equal(app.includes('"/artwork/'), false);
     assert.equal(STORAGE_KEY, "favordex.history.v1");

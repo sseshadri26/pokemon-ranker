@@ -506,12 +506,31 @@ kbd {
 .trait h4 { margin: 12px 0 0; font-size: 1rem; }
 .sheet-sub { margin: 18px 0 4px; font-size: clamp(1.6rem, 3vw, 2.2rem); }
 .sheet-note { max-width: 70ch; color: var(--muted); }
-.net-flow { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
-.net-col { flex: 1 0 220px; }
+.net-flow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  max-height: none;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.net-col { flex: 1 0 300px; }
 .net-col h3, .net-node h4 { margin: 0 0 6px; font-size: 1rem; font-family: var(--sans); font-style: normal; }
 .net-inputs { margin: 8px 0 0; padding-left: 18px; }
 .net-node { margin-top: 8px; padding: 8px; border-radius: 12px; background: color-mix(in srgb, var(--card-ink) 6%, var(--card)); }
 .net-bias, .net-more { margin: 4px 0; color: var(--card-muted); font-size: 0.78rem; }
+.net-col > p { margin: 0 0 8px; color: var(--muted); font-size: 0.85rem; }
+.net-node.trait li {
+  grid-template-columns: minmax(0, 1.1fr) minmax(40px, 0.9fr) 3.4em 3.2em;
+  gap: 6px;
+}
+.net-node .trait-name { overflow-wrap: anywhere; }
+.sheet .traits,
+.sheet .trait,
+.sheet .net-flow { max-height: none; }
 .trait h3 {
   margin: 0;
   font-family: var(--serif);
@@ -1378,6 +1397,19 @@ html[data-dex="9"] .card {
 }
 .chosen { margin: 8px 0; font-weight: 700; }
 .setup .ghost { width: auto; }
+
+body:not(.view-duel) {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+body:not(.view-duel) .device,
+body:not(.view-duel) .screen,
+body:not(.view-duel) .app {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
 
 body.view-duel {
   height: 100vh;
