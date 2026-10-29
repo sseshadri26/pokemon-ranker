@@ -230,6 +230,20 @@ function scaledColumn(name, value, center, spread) {
     const scaled = statScale(value, center, spread);
     return scaled == null ? {} : { [name]: scaled };
 }
+/** tanh(ln(meters)): 0 at 1 m, in (-1, 1). Omit missing or non-positive. */
+function squashedHeight(heightM) {
+    const meters = Number(heightM);
+    if (!Number.isFinite(meters) || meters <= 0)
+        return null;
+    return Math.tanh(Math.log(meters));
+}
+/** tanh(log10(kg) - 1.4): 0 near 25 kg, in (-1, 1). Omit missing or non-positive. */
+function squashedWeight(weightKg) {
+    const kilograms = Number(weightKg);
+    if (!Number.isFinite(kilograms) || kilograms <= 0)
+        return null;
+    return Math.tanh(Math.log10(kilograms) - 1.4);
+}
 const statsExtractor = {
     id: "stats",
     extract: (p) => ({
@@ -246,10 +260,14 @@ const statsExtractor = {
 };
 const bodyExtractor = {
     id: "body",
-    extract: (p) => ({
-        ...scaledColumn("size:height", p.heightM, 1, 0.8),
-        ...(p.weightKg > 0 ? { "size:weight": Math.log10(p.weightKg) - 1.4 } : {}),
-    }),
+    extract: (p) => {
+        const height = squashedHeight(p.heightM);
+        const weight = squashedWeight(p.weightKg);
+        return {
+            ...(height == null ? {} : { "size:height": height }),
+            ...(weight == null ? {} : { "size:weight": weight }),
+        };
+    },
 };
 const ecologyExtractor = {
     id: "ecology",
@@ -326,8 +344,8 @@ function continuousFeatures(p) {
         statScale(p.specialDefense, 70, 35),
         statScale(p.speed, 70, 35),
         statScale(bst, 420, 120),
-        statScale(p.heightM, 1, 0.8) ?? 0,
-        p.weightKg > 0 ? Math.log10(p.weightKg) - 1.4 : 0,
+        squashedHeight(p.heightM) ?? 0,
+        squashedWeight(p.weightKg) ?? 0,
         statScale(p.captureRate, 75, 80) ?? 0,
     ];
 }

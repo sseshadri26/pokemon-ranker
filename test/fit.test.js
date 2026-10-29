@@ -364,3 +364,95 @@ describe("linear algebra and the sorting bound", () => {
     assert.ok(bits < 8900);
   });
 });
+
+describe("squashed body size", () => {
+  function heightFeature(meters) {
+    return F.bodyExtractor.extract({ heightM: meters })["size:height"];
+  }
+  function weightFeature(kilograms) {
+    return F.bodyExtractor.extract({ weightKg: kilograms })["size:weight"];
+  }
+  function cell(design, id, name) {
+    const column = design.names.indexOf(name);
+    assert.ok(column >= 0, name);
+    return design.values[design.ids.indexOf(id) * design.cols + column];
+  }
+
+  it("keeps height in (-1, 1) and saturates past a tall species", () => {
+    for (const meters of [0.1, 0.5, 1, 2, 5, 20, 100]) {
+      const feature = heightFeature(meters);
+      assert.equal(typeof feature, "number");
+      assert.ok(feature > -1 && feature < 1, `${meters} m mapped to ${feature}`);
+    }
+    const one = heightFeature(1);
+    const two = heightFeature(2);
+    const five = heightFeature(5);
+    const twenty = heightFeature(20);
+    assert.ok(Math.abs(one) < 1e-12, `1 m was ${one}`);
+    assert.ok(two > one);
+    assert.ok(two - one > 0.4, `1 m and 2 m differed by ${two - one}`);
+    assert.ok(twenty - five < 0.1, `20 m and 5 m differed by ${twenty - five}`);
+    assert.ok(twenty - five < (20 - 5) / 0.8 / 10);
+
+    assert.equal(heightFeature(0), undefined);
+    assert.equal(heightFeature(-2), undefined);
+    assert.equal("size:height" in F.bodyExtractor.extract({}), false);
+
+    const design = F.buildDesignMatrix(
+      [
+        { id: 1, heightM: 1 },
+        { id: 2, heightM: 2 },
+        { id: 5, heightM: 5 },
+        { id: 20, heightM: 20 },
+      ],
+      [F.bodyExtractor],
+    );
+    assert.equal(cell(design, 1, "size:height"), 0);
+    assert.ok(Math.abs(cell(design, 2, "size:height") - two) < 1e-12);
+    assert.ok(Math.abs(cell(design, 20, "size:height") - twenty) < 1e-12);
+    assert.ok(cell(design, 20, "size:height") < 1);
+  });
+
+  it("squashes weight so very heavy species stay near heavy ones", () => {
+    const ordinary = weightFeature(25);
+    const heavy = weightFeature(400);
+    const veryHeavy = weightFeature(1000);
+    assert.ok(heavy > ordinary);
+    assert.ok(veryHeavy > ordinary);
+    assert.ok(heavy > 0.8 && heavy < 1, `400 kg was ${heavy}`);
+    assert.ok(veryHeavy > 0.8 && veryHeavy < 1, `1000 kg was ${veryHeavy}`);
+    const rawLogGap = Math.log10(1000) - Math.log10(400);
+    assert.ok(veryHeavy - heavy < rawLogGap, `${veryHeavy - heavy} was not inside ${rawLogGap}`);
+
+    assert.equal(weightFeature(0), undefined);
+    assert.equal(weightFeature(-10), undefined);
+    assert.equal("size:weight" in F.bodyExtractor.extract({}), false);
+
+    const design = F.buildDesignMatrix(
+      [
+        { id: 25, weightKg: 25 },
+        { id: 400, weightKg: 400 },
+        { id: 1000, weightKg: 1000 },
+      ],
+      [F.bodyExtractor],
+    );
+    assert.ok(Math.abs(cell(design, 1000, "size:weight") - veryHeavy) < 1e-12);
+    assert.ok(cell(design, 1000, "size:weight") < 1);
+    assert.ok(cell(design, 400, "size:weight") < 1);
+
+    const stats = {
+      hp: 50,
+      attack: 50,
+      defense: 50,
+      specialAttack: 50,
+      specialDefense: 50,
+      speed: 50,
+    };
+    const continuous = F.continuousFeatures({ ...stats, heightM: 20, weightKg: 1000 });
+    assert.equal(continuous[F.CONTINUOUS_NAMES.indexOf("Height")], heightFeature(20));
+    assert.equal(continuous[F.CONTINUOUS_NAMES.indexOf("Weight")], weightFeature(1000));
+    const missing = F.continuousFeatures(stats);
+    assert.equal(missing[F.CONTINUOUS_NAMES.indexOf("Height")], 0);
+    assert.equal(missing[F.CONTINUOUS_NAMES.indexOf("Weight")], 0);
+  });
+});

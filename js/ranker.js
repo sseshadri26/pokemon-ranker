@@ -113,7 +113,7 @@
       label: "Body",
       prefix: "size:",
       encoding: "scaled",
-      detail: "Height in meters, centered at 1 m. Weight is log kilograms, centered near 25 kg. Bigger numbers are larger Pokémon.",
+      detail: "Height is tanh of the natural log of meters, 0 at 1 m, so a huge species stays near other big ones. Weight is tanh of log10 kilograms minus 1.4, 0 near 25 kg, so extremes squash toward -1 and 1. Bigger numbers are larger Pokémon.",
     },
     {
       id: "ecology",
