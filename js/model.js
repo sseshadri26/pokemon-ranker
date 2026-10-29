@@ -156,9 +156,11 @@ function solveLower(L, n, x, out) {
  * no other fitting code changes. Binary flags, one-hots, and real-valued
  * traits are all just columns.
  *
- * The app turns on `extendedExtractors` (types and generation, plus color,
- * shape, habitat, egg group, legendary / mythical / baby, evolution stage,
- * and starter). Tests can pass a smaller list.
+ * The app turns on `extendedExtractors` (types and generation, the games a
+ * species appears in, plus color, shape, habitat, egg group, legendary /
+ * mythical / baby, evolution stage, and starter). Evolution-score columns
+ * are appended after the matrix is built and filled from the previous
+ * step's strengths. Tests can pass a smaller list.
  */
 function flag(name, on) {
     return on ? { [name]: 1 } : {};
@@ -273,6 +275,27 @@ const genderExtractor = {
         return {};
     },
 };
+const SKIPPED_GAMES = new Set(["colosseum", "xd", "red-green-japan", "blue-japan"]);
+const gamesExtractor = {
+    id: "games",
+    extract: (p) => {
+        if (!Array.isArray(p.games))
+            return {};
+        const out = {};
+        for (const game of p.games) {
+            if (!game || SKIPPED_GAMES.has(game))
+                continue;
+            out[`game:${game}`] = 1;
+        }
+        return out;
+    },
+};
+/** Filled later from lagged strengths. Emitting zeros here would drop the columns. */
+const EVO_COLUMNS = ["evo:from", "evo:into-mean", "evo:into-max"];
+const evolutionExtractor = {
+    id: "evolution",
+    extract: () => ({}),
+};
 /** Inputs to the hidden layer. BST is the sum of the six stats, so it is not also a linear column. */
 const CONTINUOUS_NAMES = ["HP", "Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed", "BST", "Height", "Weight", "Catch rate"];
 const HIDDEN = [8, 4];
@@ -298,6 +321,7 @@ const coreExtractors = [typeExtractor, generationExtractor];
 /** Core traits plus the rest of the bundled PokéAPI fields. */
 const extendedExtractors = [
     ...coreExtractors,
+    gamesExtractor,
     colorExtractor,
     shapeExtractor,
     habitatExtractor,
@@ -306,6 +330,7 @@ const extendedExtractors = [
     mythicalExtractor,
     babyExtractor,
     stageExtractor,
+    evolutionExtractor,
     starterExtractor,
     statsExtractor,
     bodyExtractor,
@@ -344,6 +369,86 @@ function buildDesignMatrix(pokemon, extractors) {
         rows: pokemon.length,
         cols,
     };
+}
+function appendColumns(design, extraNames) {
+    const adding = extraNames.filter((name) => !design.names.includes(name));
+    if (adding.length === 0)
+        return design;
+    const oldCols = design.cols;
+    const cols = oldCols + adding.length;
+    const values = new Float64Array(design.rows * cols);
+    for (let r = 0; r < design.rows; r++)
+        values.set(design.values.subarray(r * oldCols, (r + 1) * oldCols), r * cols);
+    return {
+        ids: design.ids,
+        names: design.names.concat(adding),
+        values,
+        rows: design.rows,
+        cols,
+    };
+}
+function evolutionGraph(pokemon) {
+    const rows = pokemon.length;
+    const index = new Map();
+    for (let i = 0; i < rows; i++)
+        index.set(pokemon[i].id, i);
+    const parent = new Int32Array(rows);
+    parent.fill(-1);
+    const children = Array.from({ length: rows }, () => []);
+    for (let i = 0; i < rows; i++) {
+        const from = pokemon[i].evolvesFrom;
+        if (from == null)
+            continue;
+        const at = index.get(from);
+        if (at == null || at === i)
+            continue;
+        parent[i] = at;
+        children[at].push(i);
+    }
+    const descendants = Array.from({ length: rows }, () => []);
+    for (let i = 0; i < rows; i++) {
+        const seen = new Set([i]);
+        const stack = children[i].slice();
+        while (stack.length) {
+            const next = stack.pop();
+            if (seen.has(next))
+                continue;
+            seen.add(next);
+            descendants[i].push(next);
+            const further = children[next];
+            for (let t = 0; t < further.length; t++)
+                stack.push(further[t]);
+        }
+    }
+    return { parent, children, descendants };
+}
+function writeEvolutionScores(X, rows, cols, s, evo) {
+    const fromCol = evo.from;
+    const meanCol = evo.intoMean;
+    const maxCol = evo.intoMax;
+    if (fromCol < 0 || meanCol < 0 || maxCol < 0)
+        return;
+    for (let i = 0; i < rows; i++) {
+        const base = i * cols;
+        const elder = evo.parent[i];
+        X[base + fromCol] = elder >= 0 ? s[elder] : 0;
+        const kids = evo.descendants[i];
+        if (!kids || kids.length === 0) {
+            X[base + meanCol] = 0;
+            X[base + maxCol] = 0;
+            continue;
+        }
+        let sum = 0;
+        let max = -Infinity;
+        for (let k = 0; k < kids.length; k++) {
+            const score = s[kids[k]];
+            sum += score;
+            if (score > max)
+                max = score;
+        }
+        X[base + meanCol] = sum / kids.length;
+        X[base + maxCol] = max;
+    }
 }
 
 
@@ -660,8 +765,16 @@ function fitBradleyTerry(design, comparisons, config = {}) {
     const gW = new Float64Array(cols);
     const H = new Float64Array(cols * cols);
     const step = new Float64Array(cols);
+    const h1Buf = useMlp ? new Float64Array(rows * H1) : null;
+    const h2Buf = useMlp ? new Float64Array(rows * H2) : null;
     for (let iter = 0; iter < maxIter; iter++) {
         iterations = iter + 1;
+        if (config.evolution) {
+            writeEvolutionScores(X, rows, cols, s, config.evolution);
+            if (useMlp)
+                mlpForward(X, rows, cols, H1, H2, W1, c1, W2, c2, v, h1Buf, h2Buf, netOut);
+            recomputeStrengths(X, rows, cols, w, b, s, useMlp ? netOut : undefined);
+        }
         gW.fill(0);
         H.fill(0);
         for (let k = 0; k < cols; k++) {
@@ -1208,6 +1321,11 @@ function explorePair(model, games, rng, avoid) {
     ecologyExtractor: ecologyExtractor,
     growthExtractor: growthExtractor,
     genderExtractor: genderExtractor,
+    gamesExtractor: gamesExtractor,
+    evolutionExtractor: evolutionExtractor,
+    EVO_COLUMNS: EVO_COLUMNS,
+    appendColumns: appendColumns,
+    evolutionGraph: evolutionGraph,
     continuousFeatures: continuousFeatures,
     CONTINUOUS_NAMES: CONTINUOUS_NAMES,
     HIDDEN: HIDDEN,

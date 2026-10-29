@@ -7,6 +7,8 @@
  *
  * Re-running skips artwork that is already on disk. The page itself does not
  * run this script; the bundle in the repo is what index.html opens.
+ * After a refetch, run scripts/fetch-measures.mjs and scripts/fetch-games.mjs
+ * so stats, game availability, and evolvesFrom stay on the bundle.
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -267,6 +269,7 @@ async function main() {
       baby: Boolean(species.is_baby),
       stage: stageOf(id, parentOf),
       evolves: children.has(id),
+      evolvesFrom: parentOf.get(id) ?? null,
       starter: starterLine(id, parentOf),
       forms,
     });
@@ -326,6 +329,7 @@ async function main() {
       baby: species.baby,
       stage: species.stage,
       evolves: species.evolves,
+      evolvesFrom: species.evolvesFrom,
       starter: species.starter,
       art: lead?.art ?? null,
       forms,

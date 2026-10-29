@@ -68,7 +68,7 @@ $$
 s_i = x_i^\top w + \mathrm{EV}(x_i) + b_i.
 $$
 
-$x_i$ is every input column: type, generation, color, shape, habitat, egg group, legendary, mythical, baby, evolution stage and whether it evolves further, starter, the six base stats, base stat total, height, log weight, catch rate, base happiness, egg cycles, growth rate, and gender lock. $w$ is the linear weight on each column. $\mathrm{EV}(x_i)$ is a separate network on those same columns: eight tanh units, then four tanh units, then a readout. Each unit has a bias and a learned weight on every unit that feeds it. $b_i$ is that species' own offset.
+$x_i$ is every input column: type, generation, the version groups whose Pokédex includes the species, color, shape, habitat, egg group, legendary, mythical, baby, evolution stage and whether it evolves further, the strength of its pre-evolution, the mean and best strength among every species it evolves into, starter, the six base stats, base stat total, height, log weight, catch rate, base happiness, egg cycles, growth rate, and gender lock. $w$ is the linear weight on each column. $\mathrm{EV}(x_i)$ is a separate network on those same columns: eight tanh units, then four tanh units, then a readout. Each unit has a bias and a learned weight on every unit that feeds it. $b_i$ is that species' own offset.
 
 Priors:
 
@@ -78,11 +78,11 @@ $$
 
 with $\sigma_w = 0.7$ and $\sigma_b = 1$. The prior on $b_i$ is the partial-pooling knob. A species you have barely rated stays near the strength its traits predict, because the offset is pulled toward 0. A species you have rated many times follows those picks: the likelihood overwhelms the prior. When two species are nearly tied on direct evidence, the one whose traits you have preferred ranks higher. The prior also pins the additive invariance of Bradley–Terry, so strengths cannot all drift upward together.
 
-Adding a trait later is a new extractor next to the others in `js/model.js` (each one returns a map of column name to number, and `extendedExtractors` is the list the page uses). If it needs data PokéAPI can supply, add the field in `scripts/fetch-pokemon.mjs` and pass it through `toTrait` in `js/ranker.js`. The fitter does not change. Columns are the sorted union of whatever the extractors emit.
+Adding a trait later is a new extractor next to the others in `js/model.js` (each one returns a map of column name to number, and `extendedExtractors` is the list the page uses). If it needs data PokéAPI can supply, add the field in `scripts/fetch-pokemon.mjs` and pass it through `toTrait` in `js/ranker.js`. The fitter does not change. Columns are the sorted union of whatever the extractors emit. The evolution-score columns are the exception: they are appended after that union, because a column that starts at 0 for every species would be dropped, and each fit step copies them from the previous step's strengths.
 
 ### Fitting
 
-The linear weights are still a convex piece. The network makes the whole posterior non-convex. Each answer takes a Newton step on $w$, a few Adam steps on the network weights and biases, then Gauss–Seidel Newton sweeps on each offset, warm-started from the previous answer. Uncompared offsets stay at 0. Laplace uncertainty is reported for the linear weights.
+The linear weights are still a convex piece. The network makes the whole posterior non-convex. Each answer takes a Newton step on $w$, a few Adam steps on the network weights and biases, then Gauss–Seidel Newton sweeps on each offset, warm-started from the previous answer. Before that Newton step, the pre-evolution and evolution-score columns are rewritten from the strengths of the previous step and then treated as ordinary inputs. Uncompared offsets stay at 0. A line nobody has compared leaves those score columns at 0, so an unrated evolution does not inherit a rating until some compared line has taught the weight. Laplace uncertainty is reported for the linear weights.
 
 ### Uncertainty
 
@@ -144,7 +144,8 @@ The suite covers the fit (including a numerical gradient check at the mode), hal
 - `data/pokedex.js` — the dex, inlined so the page does not have to fetch JSON
 - `data/pokemon.json` and `artwork/` — the same offline bundle
 - `scripts/fetch-pokemon.mjs` — optional PokéAPI refresh
+- `scripts/fetch-games.mjs` — version groups and pre-evolution ids, merged onto that bundle
 
 Four ride forms of Koraidon and Miraidon have no sprite in the PokéAPI artwork set. Those forms show a monogram instead of artwork; the species still rank.
 
-Rebuilding that bundle is optional. It needs Node and the `sharp` package, then `node scripts/fetch-pokemon.mjs` from this folder. The copy already in the repo is what the page uses.
+Rebuilding that bundle is optional. It needs Node and the `sharp` package, then `node scripts/fetch-pokemon.mjs` from this folder, followed by `node scripts/fetch-measures.mjs` and `node scripts/fetch-games.mjs`. The copy already in the repo is what the page uses.

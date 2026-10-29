@@ -98,6 +98,43 @@ describe("bundled National Dex", () => {
     assert.match(stage.detail, /evolves/);
   });
 
+  it("records the pre-evolution and the games each species appears in", () => {
+    assert.equal(species(1).evolvesFrom, null);
+    assert.equal(species(2).name, "Ivysaur");
+    assert.equal(species(2).evolvesFrom, 1);
+    assert.equal(species(3).evolvesFrom, 2);
+    assert.equal(species(6).evolvesFrom, 5);
+    assert.equal(species(133).evolvesFrom, null);
+    assert.ok(species(134).evolvesFrom === 133);
+    assert.equal(species(1000).name, "Gholdengo");
+    assert.equal(species(1000).evolvesFrom, 999);
+
+    for (const pokemon of POKEDEX) {
+      assert.ok(Array.isArray(pokemon.games));
+      assert.ok(pokemon.games.length > 0);
+      if (pokemon.evolvesFrom != null) {
+        assert.equal(typeof pokemon.evolvesFrom, "number");
+        assert.ok(species(pokemon.evolvesFrom));
+      }
+    }
+
+    assert.ok(species(1).games.includes("red-blue"));
+    assert.ok(species(1).games.includes("the-isle-of-armor"));
+    assert.equal(species(1).games.includes("scarlet-violet"), false);
+    assert.ok(species(6).games.includes("sword-shield"));
+    assert.ok(species(891).games.includes("the-isle-of-armor"));
+    assert.ok(species(891).games.includes("sword-shield"));
+    assert.deepEqual(species(1000).games, ["scarlet-violet"]);
+    assert.ok(species(899).games.includes("legends-arceus"));
+    assert.equal(species(1).games.includes("colosseum"), false);
+
+    const games = F.gamesExtractor.extract(toTrait(species(1)));
+    assert.equal(games["game:red-blue"], 1);
+    assert.equal(games["game:colosseum"], undefined);
+    const category = MODEL_CATEGORIES.find((item) => item.id === "games");
+    assert.equal(category.prefix, "game:");
+  });
+
   it("keeps Legends Z-A megas on the existing species", async () => {
     const { ZA_MEGAS } = await import("../scripts/za-megas.mjs");
     assert.equal(ZA_MEGAS.length, 48);

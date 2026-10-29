@@ -237,6 +237,58 @@ describe("trait features", () => {
     }
     assert.ok(attackWeight > 0.05 || attackInNet);
   });
+
+  it("feeds pre-evolution and descendant strengths back in as columns", () => {
+    const graph = F.evolutionGraph([
+      { id: 1, evolvesFrom: null },
+      { id: 2, evolvesFrom: 1 },
+      { id: 3, evolvesFrom: 2 },
+    ]);
+    assert.equal(graph.parent[0], -1);
+    assert.equal(graph.parent[1], 0);
+    assert.equal(graph.parent[2], 1);
+    assert.deepEqual(graph.descendants[0].slice().sort(), [1, 2]);
+    assert.deepEqual(graph.descendants[1], [2]);
+    assert.deepEqual(graph.descendants[2], []);
+
+    function plain(id, evolvesFrom) {
+      return { id, types: ["normal"], generation: 1, evolvesFrom };
+    }
+    const lines = 8;
+    const roster = [];
+    for (let i = 0; i < lines; i++) roster.push(plain(1 + i, null));
+    for (let i = 0; i < lines; i++) roster.push(plain(9 + i, null));
+    for (let i = 0; i < lines; i++) roster.push(plain(17 + i, 1 + i));
+    for (let i = 0; i < lines; i++) roster.push(plain(25 + i, 9 + i));
+    roster.push(plain(33, null), plain(34, null), plain(35, 33), plain(36, 34));
+    const comparisons = [];
+    for (let i = 0; i < lines; i++) {
+      for (let j = 0; j < lines; j++) {
+        comparisons.push({ a: 1 + i, b: 9 + j, outcome: "a" });
+        comparisons.push({ a: 17 + i, b: 25 + j, outcome: "a" });
+      }
+    }
+    for (let k = 0; k < 8; k++) comparisons.push({ a: 33, b: 34, outcome: "a" });
+
+    const built = F.appendColumns(F.buildDesignMatrix(roster, F.coreExtractors), F.EVO_COLUMNS);
+    const evo = F.evolutionGraph(roster);
+    const fit = F.fitBradleyTerry(built, comparisons, {
+      mlp: false,
+      maxIter: 24,
+      evolution: {
+        parent: evo.parent,
+        descendants: evo.descendants,
+        from: built.names.indexOf("evo:from"),
+        intoMean: built.names.indexOf("evo:into-mean"),
+        intoMax: built.names.indexOf("evo:into-max"),
+      },
+    });
+    const fromWeight = fit.weights[fit.featureNames.indexOf("evo:from")];
+    assert.ok(fromWeight > 0.05, `evo:from weight was ${fromWeight}`);
+    const strongChild = fit.strength[fit.ids.indexOf(35)];
+    const weakChild = fit.strength[fit.ids.indexOf(36)];
+    assert.ok(strongChild > weakChild + 0.05, `held-out children ${strongChild} vs ${weakChild}`);
+  });
 });
 
 describe("linear algebra and the sorting bound", () => {

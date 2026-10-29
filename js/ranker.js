@@ -25,6 +25,13 @@
       detail: "One column for the generation the species was introduced in.",
     },
     {
+      id: "games",
+      label: "Games",
+      prefix: "game:",
+      encoding: "multi-hot",
+      detail: "One column for each version group this species appears in, from its Pokédex entries. Expansions such as the Isle of Armor have their own column as well as the base game. Legends: Z-A is not listed; PokéAPI has no version group for it yet.",
+    },
+    {
       id: "color",
       label: "Color",
       prefix: "color:",
@@ -79,6 +86,13 @@
       prefix: "stage:",
       encoding: "one-hot",
       detail: "One column for each evolution stage and whether that species evolves further, so a stage 1 that evolves is separate from a stage 1 that does not.",
+    },
+    {
+      id: "evolution",
+      label: "Evolution scores",
+      prefix: "evo:",
+      encoding: "score",
+      detail: "The current strength of the species this one evolves from, and the mean and best strength of every species it evolves into, including later stages. Those scores are copied from the previous fit step, so ranking a line moves its relatives. A missing relative leaves that column at 0.",
     },
     {
       id: "starter",
@@ -194,6 +208,8 @@
       isBaby: pokemon.baby,
       evolutionStage: pokemon.stage,
       evolves: Boolean(pokemon.evolves),
+      evolvesFrom: pokemon.evolvesFrom == null ? null : pokemon.evolvesFrom,
+      games: pokemon.games || [],
       isStarter: pokemon.starter,
       hp: pokemon.hp,
       attack: pokemon.attack,
@@ -235,7 +251,18 @@
     var warm = null;
     var lock = false;
     var traits = pokemon.map(toTrait);
-    var design = F.buildDesignMatrix(traits, options.extractors || F.extendedExtractors);
+    var design = F.appendColumns(
+      F.buildDesignMatrix(traits, options.extractors || F.extendedExtractors),
+      F.EVO_COLUMNS
+    );
+    var evoGraph = F.evolutionGraph(traits);
+    var evoColumns = {
+      parent: evoGraph.parent,
+      descendants: evoGraph.descendants,
+      from: design.names.indexOf("evo:from"),
+      intoMean: design.names.indexOf("evo:into-mean"),
+      intoMax: design.names.indexOf("evo:into-max"),
+    };
     var byId = new Map(pokemon.map(function (p) { return [p.id, p]; }));
     var state = null;
 
@@ -255,6 +282,7 @@
         warm: warm || undefined,
         maxIter: options.maxIter || 12,
         mlp: options.mlp !== false,
+        evolution: evoColumns,
       });
       warm = {
         w: fit.weights.slice(),
