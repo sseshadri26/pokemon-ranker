@@ -441,7 +441,7 @@ kbd {
 .ledger li {
   padding: 8px 10px;
   border-top: 1px solid var(--line);
-  cursor: grab;
+  cursor: pointer;
 }
 .ledger li:focus-visible { outline: 2px solid var(--coral); outline-offset: -2px; }
 .ledger li.dragging { opacity: 0.45; cursor: grabbing; }
@@ -636,6 +636,114 @@ kbd {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .modal button { color: var(--card-ink); border-color: rgba(29, 25, 20, 0.2); }
 .modal .danger { background: var(--coral); color: white; border-color: var(--coral); }
+.species-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  background: rgba(8, 10, 7, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.species-sheet {
+  width: min(820px, 100%);
+  max-height: min(88vh, 920px);
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  color: var(--card-ink);
+  border-radius: 20px;
+  padding: 16px 18px 18px;
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.38);
+}
+.species-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.species-sheet h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+}
+.species-sheet .eyebrow { margin: 0 0 4px; }
+#species-close {
+  border: 1px solid color-mix(in srgb, var(--card-ink) 28%, transparent);
+  background: transparent;
+  color: var(--card-ink);
+  border-radius: 999px;
+  padding: 8px 14px;
+  flex: 0 0 auto;
+}
+#species-close:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
+#species-body {
+  overflow: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+.species-id {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 0 0 12px;
+}
+.species-id .mini { width: 56px; height: 56px; }
+.species-id .mini img { width: 56px; height: 56px; }
+.species-forms { margin: 0 0 12px; color: var(--card-muted); }
+.species-sheet .facts { margin-top: 0; }
+.species-sheet .facts div {
+  background: color-mix(in srgb, var(--card-ink) 6%, var(--card));
+}
+.certainty { margin: 0 0 14px; max-width: 68ch; }
+.record {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.record li {
+  border: 1px solid color-mix(in srgb, var(--card-ink) 16%, transparent);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-variant-numeric: tabular-nums;
+}
+.species-sheet .match-log { margin: 0 0 16px; }
+.species-sheet .match-log li {
+  grid-template-columns: minmax(0, 1.2fr) 4.5em minmax(140px, 0.9fr);
+}
+.offset-note { margin: 0 0 12px; max-width: 68ch; color: var(--card-muted); }
+.parts-equation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+.parts-equation strong { font-weight: 700; }
+.species-sheet .trait {
+  background: color-mix(in srgb, var(--card-ink) 6%, var(--card));
+  margin-bottom: 10px;
+}
+.contrib-head, .species-sheet .contrib li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) 5em 5.6em 6.4em;
+  gap: 8px;
+  align-items: baseline;
+}
+.contrib-head {
+  margin: 8px 0 0;
+  color: var(--card-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.species-sheet .contrib li { padding: 5px 0; }
+.contrib-num { text-align: right; font-variant-numeric: tabular-nums; }
+.species-sub { margin: 16px 0 6px; font-size: 1.35rem; }
 /* Floats on the desk, outside the device, so a clipped screen cannot hide it. */
 .data-panel {
   position: fixed;

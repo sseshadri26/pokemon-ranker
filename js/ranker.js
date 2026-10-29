@@ -151,6 +151,117 @@
     return b.weight - a.weight || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
   }
 
+  function lookupName(names, id) {
+    if (!names) return "#" + id;
+    var found = typeof names.get === "function" ? names.get(id) : names[id];
+    if (found == null) return "#" + id;
+    if (typeof found === "string") return found;
+    if (found.name) return found.name;
+    return "#" + id;
+  }
+
+  function speciesRecord(history, id, names) {
+    var wins = 0;
+    var losses = 0;
+    var ties = 0;
+    var skips = 0;
+    var matchups = [];
+    for (var i = 0; i < history.length; i++) {
+      var entry = history[i];
+      var side = entry.a === id ? "a" : entry.b === id ? "b" : "";
+      if (!side) continue;
+      var result;
+      if (entry.outcome === "tie") {
+        ties += 1;
+        result = "tie";
+      } else if (entry.outcome === "skip") {
+        skips += 1;
+        result = "skip";
+      } else if (entry.outcome === side) {
+        wins += 1;
+        result = "won";
+      } else if (entry.outcome === "a" || entry.outcome === "b") {
+        losses += 1;
+        result = "lost";
+      } else {
+        continue;
+      }
+      matchups.push({
+        opponentId: side === "a" ? entry.b : entry.a,
+        opponent: lookupName(names, side === "a" ? entry.b : entry.a),
+        result: result,
+        at: entry.at,
+        order: i,
+      });
+    }
+    matchups.sort(function (a, b) {
+      if (a.at !== b.at) return b.at - a.at;
+      return b.order - a.order;
+    });
+    return {
+      wins: wins,
+      losses: losses,
+      ties: ties,
+      skips: skips,
+      matchups: matchups.map(function (row) {
+        return {
+          opponentId: row.opponentId,
+          opponent: row.opponent,
+          result: row.result,
+          at: row.at,
+        };
+      }),
+    };
+  }
+
+  function groupContributions(columns) {
+    var buckets = MODEL_CATEGORIES.map(function () { return []; });
+    var other = [];
+    columns.forEach(function (column) {
+      if (!column || column.value === 0) return;
+      var copy = {
+        key: column.key,
+        value: column.value,
+        weight: column.weight,
+        contribution: column.contribution,
+      };
+      var at = categoryIndex(column.key);
+      if (at === -1) other.push(copy);
+      else buckets[at].push(copy);
+    });
+    function finish(id, label, list, order) {
+      list.sort(function (a, b) {
+        var diff = Math.abs(b.contribution) - Math.abs(a.contribution);
+        if (diff) return diff;
+        if (a.key < b.key) return -1;
+        if (a.key > b.key) return 1;
+        return 0;
+      });
+      var sum = 0;
+      for (var i = 0; i < list.length; i++) sum += list[i].contribution;
+      return { id: id, label: label, contribution: sum, columns: list, order: order };
+    }
+    var categories = [];
+    for (var i = 0; i < MODEL_CATEGORIES.length; i++) {
+      if (buckets[i].length === 0) continue;
+      categories.push(finish(MODEL_CATEGORIES[i].id, MODEL_CATEGORIES[i].label, buckets[i], i));
+    }
+    if (other.length > 0) categories.push(finish("other", "Other", other, MODEL_CATEGORIES.length));
+    categories.sort(function (a, b) {
+      var diff = Math.abs(b.contribution) - Math.abs(a.contribution);
+      if (diff) return diff;
+      return a.order - b.order;
+    });
+    return categories.map(function (category) {
+      return {
+        id: category.id,
+        label: category.label,
+        contribution: category.contribution,
+        columns: category.columns,
+      };
+    });
+  }
+
   function modelReport(fit) {
     var buckets = MODEL_CATEGORIES.map(function () { return []; });
     var other = [];
@@ -265,6 +376,7 @@
     };
     var byId = new Map(pokemon.map(function (p) { return [p.id, p]; }));
     var state = null;
+    var lastFit = null;
 
     function persist() {
       if (!storage) return null;
@@ -284,6 +396,7 @@
         mlp: options.mlp !== false,
         evolution: evoColumns,
       });
+      lastFit = fit;
       warm = {
         w: fit.weights.slice(),
         b: fit.offset.slice(),
@@ -497,6 +610,65 @@
         notice = message;
         state.notice = message;
         return state;
+      },
+      speciesDetail: function (id) {
+        if (!lastFit || !state || !byId.has(id)) return null;
+        var index = -1;
+        for (var i = 0; i < lastFit.ids.length; i++) {
+          if (lastFit.ids[i] === id) {
+            index = i;
+            break;
+          }
+        }
+        if (index < 0) return null;
+        var cols = design.cols;
+        var row = new Array(cols);
+        var base = index * cols;
+        for (var k = 0; k < cols; k++) row[k] = design.values[base + k];
+        var parts = F.strengthBreakdown(row, lastFit.weights, lastFit.network, lastFit.offset[index], design.names);
+        var mon = byId.get(id);
+        var ranked = null;
+        for (var r = 0; r < state.rows.length; r++) {
+          if (state.rows[r].pokemon.id === id) {
+            ranked = state.rows[r];
+            break;
+          }
+        }
+        var strength = ranked ? ranked.score : lastFit.strength[index];
+        var record = speciesRecord(history, id, byId);
+        var forms = [];
+        if (mon.forms && mon.forms.length) {
+          for (var f = 0; f < mon.forms.length; f++) {
+            var form = mon.forms[f];
+            if (!form) continue;
+            forms.push({ name: form.name || mon.name, kind: form.kind || "" });
+          }
+        }
+        return {
+          id: id,
+          name: mon.name,
+          dex: mon.id,
+          types: (mon.types || []).slice(),
+          generation: mon.generation,
+          art: mon.art || "",
+          forms: forms,
+          rank: ranked ? ranked.rank : null,
+          strength: strength,
+          sd: ranked ? ranked.sd : lastFit.sd[index],
+          games: ranked ? ranked.games : 0,
+          record: {
+            wins: record.wins,
+            losses: record.losses,
+            ties: record.ties,
+            skips: record.skips,
+          },
+          matchups: record.matchups,
+          linear: parts.linear,
+          ev: parts.ev,
+          offset: parts.offset,
+          partsMatch: Math.abs(parts.strength - strength) <= 1e-6,
+          categories: groupContributions(parts.columns),
+        };
       },
     };
   }

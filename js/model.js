@@ -1341,6 +1341,79 @@ function explorePair(model, games, rng, avoid) {
     };
 }
 
+/**
+ * EV(x) for one design row. network is { W1, c1, W2, c2, v } from a fit.
+ * Same two tanh layers as mlpForward: h1 = tanh(W1 x + c1), h2 = tanh(W2 h1 + c2), EV = v · h2.
+ */
+function networkValue(row, network) {
+    if (!network || !network.c1 || !network.c2 || !network.W1 || !network.W2 || !network.v)
+        return 0;
+    const H1 = network.c1.length;
+    const H2 = network.c2.length;
+    const cols = row.length;
+    if (H1 === 0 || H2 === 0)
+        return 0;
+    if (network.W1.length < H1 * cols || network.W2.length < H2 * H1 || network.v.length < H2)
+        return 0;
+    const h1 = new Float64Array(H1);
+    for (let a = 0; a < H1; a++) {
+        let pre = network.c1[a];
+        const base = a * cols;
+        for (let j = 0; j < cols; j++)
+            pre += network.W1[base + j] * row[j];
+        h1[a] = Math.tanh(pre);
+    }
+    let total = 0;
+    for (let b = 0; b < H2; b++) {
+        let pre = network.c2[b];
+        const base = b * H1;
+        for (let a = 0; a < H1; a++)
+            pre += network.W2[base + a] * h1[a];
+        total += network.v[b] * Math.tanh(pre);
+    }
+    return total;
+}
+
+function finiteAt(source, index) {
+    if (!source)
+        return 0;
+    const value = source[index];
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * Linear contributions and EV(x) for one design row. Does not fit.
+ * s = x·w + EV(x) + b. Columns with a zero input are still returned; callers hide them.
+ */
+function strengthBreakdown(row, weights, network, offset, names) {
+    const cols = weights ? weights.length : 0;
+    const values = new Float64Array(cols);
+    const columns = [];
+    let linear = 0;
+    for (let k = 0; k < cols; k++) {
+        const value = finiteAt(row, k);
+        const weight = finiteAt(weights, k);
+        const contribution = value === 0 || weight === 0 ? 0 : value * weight;
+        values[k] = value;
+        linear += contribution;
+        columns.push({
+            key: names && names[k] != null ? names[k] : String(k),
+            value,
+            weight,
+            contribution,
+        });
+    }
+    const ev = networkValue(values, network);
+    const speciesOffset = typeof offset === "number" && Number.isFinite(offset) ? offset : 0;
+    return {
+        linear,
+        ev,
+        offset: speciesOffset,
+        strength: linear + ev + speciesOffset,
+        columns,
+    };
+}
+
 
   return {
     sigmoid: sigmoid,
@@ -1380,6 +1453,7 @@ function explorePair(model, games, rng, avoid) {
     extendedExtractors: extendedExtractors,
     buildDesignMatrix: buildDesignMatrix,
     fitBradleyTerry: fitBradleyTerry,
+    strengthBreakdown: strengthBreakdown,
     posteriorNll: posteriorNll,
     EXPORT_VERSION: EXPORT_VERSION,
     ratedComparisons: ratedComparisons,

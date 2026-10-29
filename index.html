@@ -108,7 +108,7 @@
         <p class="shown" id="shown"></p>
       </div>
       <p class="leans" id="leans" hidden></p>
-      <p class="reorder-note">Drag a row, or use Up and Down. That move is saved as a comparison with each species it passes.</p>
+      <p class="reorder-note">Drag a row, or use Up and Down. That move is saved as a comparison with each species it passes. Click a row, or press Enter or Space, for its matchups and the model breakdown.</p>
       <div class="ledger-head">
         <span></span>
         <span>Rank</span>
@@ -216,6 +216,18 @@
         <button type="button" id="keep">Keep them</button>
         <button type="button" class="danger" id="confirm-reset">Reset</button>
       </div>
+    </div>
+  </div>
+  <div class="species-panel" id="species-panel" role="dialog" aria-modal="true" aria-labelledby="species-title" hidden>
+    <div class="species-sheet" id="species-sheet">
+      <div class="species-head">
+        <div>
+          <p class="eyebrow" id="species-kicker">Species</p>
+          <h2 id="species-title">Species</h2>
+        </div>
+        <button type="button" id="species-close">Close</button>
+      </div>
+      <div id="species-body"></div>
     </div>
   </div>
   <script src="data/pokedex.js"></script>

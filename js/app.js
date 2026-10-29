@@ -21,6 +21,8 @@
   var drag = null;
   var swiped = false;
   var uiLock = false;
+  var speciesReturnId = null;
+  var suppressRowClick = false;
 
   var els = {
     count: document.getElementById("matchup-count"),
@@ -62,6 +64,11 @@
     historyEmpty: document.getElementById("history-empty"),
     setup: document.getElementById("setup"),
     setupNote: document.getElementById("setup-note"),
+    speciesPanel: document.getElementById("species-panel"),
+    speciesTitle: document.getElementById("species-title"),
+    speciesKicker: document.getElementById("species-kicker"),
+    speciesBody: document.getElementById("species-body"),
+    speciesClose: document.getElementById("species-close"),
   };
 
   function typeColor(type) {
@@ -447,7 +454,7 @@
         return '<span class="type" style="background:' + typeColor(name) + ";color:" + typeInk(name) + '">' +
           esc(titleType(name)) + "</span>";
       }).join("");
-      return '<li data-id="' + row.pokemon.id + '" tabindex="0">' +
+      return '<li data-id="' + row.pokemon.id + '" tabindex="0" aria-haspopup="dialog">' +
         '<span class="move">' +
         '<button type="button" data-dir="up" aria-label="Move ' + esc(row.pokemon.name) + ' up">Up</button>' +
         '<button type="button" data-dir="down" aria-label="Move ' + esc(row.pokemon.name) + ' down">Down</button>' +
@@ -692,7 +699,163 @@
     els.modelNetwork.innerHTML = inputCol + layerCols + evCol;
   }
 
+  function countLabel(n, one, many) {
+    return n.toLocaleString() + " " + (n === 1 ? one : many);
+  }
+
+  function formatInput(value) {
+    if (!Number.isFinite(value)) return "0";
+    var nearest = Math.round(value);
+    if (Math.abs(value - nearest) < 1e-9) return String(nearest);
+    return value.toFixed(3);
+  }
+
+  function formatBreakdown(value) {
+    var text = value.toFixed(3);
+    return value > 0 ? "+" + text : text;
+  }
+
+  function signedDigits(value, digits) {
+    var text = value.toFixed(digits);
+    return value > 0 ? "+" + text : text;
+  }
+
+  function equationDigits(linear, ev, offsetValue) {
+    var digits = 3;
+    function q(n, d) {
+      return Math.round(n * Math.pow(10, d));
+    }
+    while (digits <= 8) {
+      if (q(linear, digits) + q(ev, digits) + q(offsetValue, digits) === q(linear + ev + offsetValue, digits)) {
+        return digits;
+      }
+      digits += 1;
+    }
+    return 4;
+  }
+
+  function certaintyPhrase(sd) {
+    if (!Number.isFinite(sd)) return "The certainty of this strength is unknown.";
+    if (sd < 0.35) return "Very certain. A smaller Laplace deviation means this strength is more pinned down.";
+    if (sd < 0.75) return "Fairly certain. The Laplace deviation has narrowed, so this rank is more settled than a wide bar.";
+    if (sd < 1.25) return "Somewhat uncertain. This Laplace deviation is still wide, and more matchups would make it more certain.";
+    return "Uncertain. This Laplace deviation is large, so the strength can still move. A smaller deviation would mean more certainty.";
+  }
+
+  function resultWord(result) {
+    if (result === "won") return "Won";
+    if (result === "lost") return "Lost";
+    if (result === "tie") return "Tie";
+    if (result === "skip") return "Skip";
+    return result;
+  }
+
+  function whenLabel(at) {
+    var date = new Date(at);
+    if (!Number.isFinite(date.getTime())) return "Unknown time";
+    return date.toLocaleString();
+  }
+
+  function hideSpecies(restore) {
+    if (!els.speciesPanel || els.speciesPanel.hidden) return;
+    var id = speciesReturnId;
+    els.speciesPanel.hidden = true;
+    speciesReturnId = null;
+    if (restore && id != null) {
+      var row = els.ledger.querySelector('li[data-id="' + id + '"]');
+      if (row) row.focus({ preventScroll: true });
+    }
+  }
+
+  function showSpecies(id) {
+    var detail = ranker.speciesDetail(id);
+    if (!detail || !els.speciesPanel) return false;
+    speciesReturnId = id;
+    var dex = "#" + String(detail.dex).padStart(4, "0");
+    els.speciesKicker.textContent = dex + " · " + generationLabel(detail.generation);
+    els.speciesTitle.textContent = detail.name;
+    var art = detail.art
+      ? '<span class="mini"><img src="' + esc(artUrl(detail.art)) + '" alt=""></span>'
+      : "";
+    var forms = detail.forms.filter(function (form) { return form && form.name; });
+    var formHtml = forms.length > 1
+      ? '<p class="species-forms">Forms: ' + forms.map(function (form) { return esc(form.name); }).join(", ") + "</p>"
+      : "";
+    var digits = equationDigits(detail.linear, detail.ev, detail.offset);
+    var equation = signedDigits(detail.linear, digits) + " + " +
+      signedDigits(detail.ev, digits) + " + " +
+      signedDigits(detail.offset, digits) + " = " +
+      signedDigits(detail.linear + detail.ev + detail.offset, digits);
+    var categories = detail.categories.length
+      ? detail.categories.map(function (category) {
+        var rows = category.columns.map(function (column) {
+          return "<li>" +
+            '<span class="trait-name">' + esc(traitLabel(category.id, column.key)) + "</span>" +
+            '<span class="contrib-num">' + esc(formatInput(column.value)) + "</span>" +
+            '<span class="contrib-num">' + formatBreakdown(column.weight) + "</span>" +
+            '<span class="contrib-num">' + formatBreakdown(column.contribution) + "</span></li>";
+        }).join("");
+        return '<section class="trait" data-testid="species-category" data-category="' + esc(category.id) + '">' +
+          "<h3>" + esc(category.label) + ' <span class="encoding">sum ' + formatBreakdown(category.contribution) + "</span></h3>" +
+          '<p class="contrib-head"><span>Column</span><span>Input</span><span>Weight</span><span>Value × weight</span></p>' +
+          '<ol class="contrib">' + rows + "</ol></section>";
+      }).join("")
+      : '<p class="empty">No trait columns are on for this species.</p>';
+    var matchups = detail.matchups.length
+      ? '<ol class="match-log">' + detail.matchups.map(function (bout) {
+        return "<li>" +
+          '<span class="bout">' + esc(bout.opponent) + "</span>" +
+          '<span class="result">' + esc(resultWord(bout.result)) + "</span>" +
+          '<span class="when">' + esc(whenLabel(bout.at)) + "</span></li>";
+      }).join("") + "</ol>"
+      : '<p class="empty">No matchups yet.</p>';
+    var gap = detail.partsMatch
+      ? ""
+      : '<p class="empty">Linear + network + offset differs from the fitted strength.</p>';
+    els.speciesBody.innerHTML =
+      '<div class="species-id">' + art +
+      '<div class="types">' + typeChips(detail.types) + "</div></div>" +
+      formHtml +
+      '<dl class="facts">' +
+      '<div><dt>Rank</dt><dd data-testid="species-rank">' + detail.rank + "</dd></div>" +
+      '<div><dt>Strength</dt><dd data-testid="species-strength">' + formatScore(detail.strength) + "</dd></div>" +
+      '<div><dt>Uncertainty</dt><dd data-testid="species-uncertainty">' + formatSd(detail.sd) + "</dd></div>" +
+      '<div><dt>Matchups</dt><dd data-testid="species-matchups-count">' + detail.games + "</dd></div>" +
+      "</dl>" +
+      '<p class="certainty" data-testid="species-certainty">' + esc(certaintyPhrase(detail.sd)) + "</p>" +
+      "<h3 class=\"species-sub\">Record</h3>" +
+      '<ul class="record">' +
+      "<li>" + countLabel(detail.record.wins, "win", "wins") + "</li>" +
+      "<li>" + countLabel(detail.record.losses, "loss", "losses") + "</li>" +
+      "<li>" + countLabel(detail.record.ties, "tie", "ties") + "</li>" +
+      "<li>" + countLabel(detail.record.skips, "skip", "skips") + "</li>" +
+      "</ul>" +
+      '<p>' + countLabel(detail.games, "matchup", "matchups") + " in the ranking. Skips stay in the record and out of the fit.</p>" +
+      '<section data-testid="species-matchups"><h3 class="species-sub">Matchups</h3>' + matchups + "</section>" +
+      '<section data-testid="species-breakdown"><h3 class="species-sub">Model breakdown</h3>' +
+      "<p>s = x·w + EV(x) + b. Zero columns for this species are hidden. The rest are sorted by how much they add.</p>" +
+      '<p class="parts-equation" data-testid="species-equation">' +
+      "<span>x·w <strong>" + signedDigits(detail.linear, digits) + "</strong></span>" +
+      "<span>EV(x) <strong>" + signedDigits(detail.ev, digits) + "</strong></span>" +
+      "<span>b <strong>" + signedDigits(detail.offset, digits) + "</strong></span>" +
+      "<span>s <strong>" + signedDigits(detail.linear + detail.ev + detail.offset, digits) + "</strong></span>" +
+      "</p>" +
+      '<p class="offset-note">Shown as ' + esc(equation) + ". The ranking row rounds this strength to two decimals.</p>" +
+      gap +
+      '<p class="offset-note">The species offset is part of the strength even when it is near zero. An uncompared species stays near the trait prediction because the offset prior pulls b toward 0.</p>' +
+      categories +
+      "</section>";
+    els.speciesPanel.hidden = false;
+    return true;
+  }
+
+  function openSpecies(id) {
+    if (!showSpecies(id)) return;
+    els.speciesClose.focus({ preventScroll: true });
+  }
+
   function render() {
+    if (view !== "board") hideSpecies(false);
     renderHeader();
     var pair = sides();
     var showDuel = view === "duel" && pair.left && pair.right;
@@ -710,6 +873,9 @@
     document.body.classList.toggle("view-duel", view === "duel");
     if (showDuel) renderDuel();
     if (view === "board") renderBoard();
+    if (view === "board" && speciesReturnId != null && els.speciesPanel && !els.speciesPanel.hidden) {
+      showSpecies(speciesReturnId);
+    }
     if (view === "model") renderModel();
     if (view === "history") renderHistory();
   }
@@ -930,11 +1096,18 @@
   document.getElementById("data-close").addEventListener("click", function () {
     setDataOpen(false);
   });
+  els.speciesClose.addEventListener("click", function () {
+    hideSpecies(true);
+  });
+  els.speciesPanel.addEventListener("pointerdown", function (event) {
+    if (event.target === els.speciesPanel) hideSpecies(true);
+  });
   document.addEventListener("pointerdown", function (event) {
     if (dataPanel.hidden) return;
     var target = event.target;
     if (dataPanel.contains(target) || dataMenu.contains(target)) return;
     if (els.modal.hidden === false && els.modal.contains(target)) return;
+    if (els.speciesPanel && els.speciesPanel.hidden === false && els.speciesPanel.contains(target)) return;
     setDataOpen(false);
     if (els.stage.contains(target)) {
       event.preventDefault();
@@ -1019,16 +1192,28 @@
 
   var rowDrag = null;
   els.ledger.addEventListener("click", function (event) {
-    var button = event.target.closest("button[data-dir]");
-    if (!button || !els.ledger.contains(button)) return;
-    var li = button.closest("li");
-    if (!li) return;
-    var id = Number(li.getAttribute("data-id"));
-    var from = shownIndex(id);
-    if (from < 0) return;
-    applyMove(id, from + (button.getAttribute("data-dir") === "up" ? -1 : 1));
+    if (suppressRowClick) {
+      suppressRowClick = false;
+      event.preventDefault();
+      return;
+    }
+    var button = event.target.closest("button");
+    if (button && els.ledger.contains(button)) {
+      if (!button.hasAttribute("data-dir")) return;
+      var li = button.closest("li");
+      if (!li) return;
+      var id = Number(li.getAttribute("data-id"));
+      var from = shownIndex(id);
+      if (from < 0) return;
+      applyMove(id, from + (button.getAttribute("data-dir") === "up" ? -1 : 1));
+      return;
+    }
+    var row = event.target.closest("li");
+    if (!row || !els.ledger.contains(row)) return;
+    openSpecies(Number(row.getAttribute("data-id")));
   });
   els.ledger.addEventListener("pointerdown", function (event) {
+    suppressRowClick = false;
     if (event.button !== 0 && event.pointerType === "mouse") return;
     if (event.target.closest("button")) return;
     var li = event.target.closest("li");
@@ -1081,7 +1266,10 @@
     var moved = info.active;
     var to = moved ? indexAtPointer(event.clientY) : -1;
     clearDragMarks();
-    if (moved) applyMove(info.id, to);
+    if (moved) {
+      suppressRowClick = true;
+      applyMove(info.id, to);
+    }
   }
   els.ledger.addEventListener("pointerup", finishRowDrag);
   els.ledger.addEventListener("pointercancel", function (event) {
@@ -1091,6 +1279,13 @@
   });
 
   window.addEventListener("keydown", function (event) {
+    if (els.speciesPanel && els.speciesPanel.hidden === false) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        hideSpecies(true);
+      }
+      return;
+    }
     var tag = event.target && event.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
     if ((view === "history" || els.history.contains(event.target)) &&
@@ -1106,6 +1301,9 @@
         var from = shownIndex(id);
         if (from < 0) return;
         applyMove(id, from + (event.key === "ArrowUp" ? -1 : 1));
+      } else if ((event.key === "Enter" || event.key === " ") && event.target.tagName === "LI") {
+        event.preventDefault();
+        openSpecies(Number(event.target.getAttribute("data-id")));
       }
       return;
     }
