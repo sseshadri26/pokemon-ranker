@@ -10,7 +10,7 @@
  * After a refetch, run scripts/fetch-measures.mjs and scripts/fetch-games.mjs
  * so stats, game availability, and evolvesFrom stay on the bundle.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { applyZaMegas, downloadPortrait, sortForms } from "./za-megas.mjs";
 
@@ -146,17 +146,31 @@ function starterLine(id, parentOf) {
   return false;
 }
 
-function artworkUrls({ pokemonId, formId, formName, hiresFirst }) {
+/**
+ * Sprite files are named by pokemon id, not pokemon-form id. Those numbers
+ * collide: Spewpa's polar form is form 10290, and pokemon 10290 is Mega
+ * Eelektross. Fetching sprites/pokemon/{formId}.png painted that mega onto Spewpa.
+ */
+function artworkUrls({ pokemonId, formName, hiresFirst }) {
   const urls = [];
   if (hiresFirst) {
     urls.push(`${SPRITE}/other/official-artwork/${pokemonId}.png`);
     urls.push(`${SPRITE}/other/home/${pokemonId}.png`);
   }
   if (formName) urls.push(`${SPRITE}/${pokemonId}-${formName}.png`);
-  if (formId !== pokemonId) urls.push(`${SPRITE}/${formId}.png`);
   urls.push(`${SPRITE}/${pokemonId}.png`);
   if (!hiresFirst) urls.push(`${SPRITE}/other/official-artwork/${pokemonId}.png`);
   return [...new Set(urls)];
+}
+
+function isBaseSpeciesSprite(url, pokemonId) {
+  if (!url || pokemonId == null) return false;
+  const id = String(pokemonId);
+  return (
+    url.endsWith(`/pokemon/${id}.png`) ||
+    url.endsWith(`/official-artwork/${id}.png`) ||
+    url.endsWith(`/home/${id}.png`)
+  );
 }
 
 async function mapPool(items, limit, worker) {
@@ -241,9 +255,9 @@ async function main() {
           _job: {
             file,
             primary,
+            pokemonId: variety.id,
             urls: artworkUrls({
               pokemonId: variety.id,
-              formId: form?.id ?? variety.id,
               formName: form?.form_name || "",
               hiresFirst: primary,
             }),
@@ -296,6 +310,14 @@ async function main() {
     if (!result.cached && !result.url) {
       failed += 1;
       saved.set(job.file, null);
+    } else if (result.url && job.pokemonId != null && !job.primary && isBaseSpeciesSprite(result.url, job.pokemonId)) {
+      // No portrait of its own. Keep the base species sprite on the default form only.
+      saved.set(job.file, { drop: true });
+      try {
+        await unlink(dest);
+      } catch {
+        // The form is still omitted when the file is already gone.
+      }
     } else if (result.url) {
       saved.set(job.file, { pixel: job.pixel ?? isPixelSource(result.url) });
     } else {
@@ -308,11 +330,12 @@ async function main() {
   process.stdout.write("\n");
 
   const pokemon = drafted.map((species) => {
-    const forms = species.forms.map((form) => {
+    const forms = species.forms.flatMap((form) => {
       const meta = saved.get(form._job.file);
+      if (meta?.drop) return [];
       const art = meta ? form.art : null;
       const pixel = meta ? Boolean(meta.pixel) : false;
-      return { name: form.name, art, types: form.types, kind: form.kind, pixel };
+      return [{ name: form.name, art, types: form.types, kind: form.kind, pixel }];
     });
     const lead = forms.find((form) => form.kind === "default" && form.art) ?? forms.find((form) => form.art);
     return {
