@@ -2,21 +2,18 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const F = require("../js/model.js");
 
-function kendallTau(estimate, truth) {
-  const n = estimate.length;
-  let concordant = 0;
-  let discordant = 0;
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const de = estimate[i] - estimate[j];
-      const dt = truth[i] - truth[j];
-      if (de === 0 || dt === 0) continue;
-      if (de * dt > 0) concordant += 1;
-      else discordant += 1;
-    }
+function endRankError(estimate, truth, k) {
+  const n = truth.length;
+  const byTruth = truth.map((_, index) => index).sort((a, b) => truth[b] - truth[a] || a - b);
+  const byEstimate = estimate.map((_, index) => index).sort((a, b) => estimate[b] - estimate[a] || a - b);
+  const estimatedRank = new Array(n);
+  byEstimate.forEach((index, place) => { estimatedRank[index] = place + 1; });
+  let error = 0;
+  for (let place = 0; place < k; place++) {
+    error += Math.abs(estimatedRank[byTruth[place]] - (place + 1));
+    error += Math.abs(estimatedRank[byTruth[n - 1 - place]] - (n - place));
   }
-  const total = concordant + discordant;
-  return total === 0 ? 0 : (concordant - discordant) / total;
+  return error / (2 * k);
 }
 
 describe("pair selector", () => {
@@ -78,7 +75,12 @@ describe("pair selector", () => {
     assert.ok(elapsed < 100, `selection took ${elapsed}ms`);
   });
 
-  it("recovers a hidden ranking faster with active pairs than with random pairs", () => {
+  it("places the true ends more accurately than random pairing", () => {
+    // Whole-list Kendall tau is the wrong score once pairs are tail-weighted.
+    // On these 24 species and 140 duels it is about 0.73 for active pairing
+    // and 0.80 for random: most pairwise agreements sit in the middle, and
+    // the weight spends duels on the ends. Mean absolute rank error of the
+    // true top two and bottom two is the check that matches that objective.
     const n = 24;
     const rounds = 140;
     const seeds = [11, 22, 33, 44, 55, 66, 77, 88];
@@ -101,7 +103,62 @@ describe("pair selector", () => {
     const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
     const active = mean(activeScores);
     const random = mean(randomScores);
-    assert.ok(active > random + 0.04, `active ${active} vs random ${random}`);
+    assert.ok(active + 0.25 < random, `active end error ${active} vs random ${random}`);
+  });
+
+  it("is 1 at both ends, 0 at the median, and symmetric", () => {
+    assert.equal(F.tailWeight(0), 1);
+    assert.equal(F.tailWeight(1), 1);
+    assert.ok(Math.abs(F.tailWeight(0.5)) < 1e-12);
+    for (let k = 0; k <= 20; k++) {
+      const p = k / 20;
+      assert.ok(Math.abs(F.tailWeight(p) - F.tailWeight(1 - p)) < 1e-12, `p=${p}`);
+    }
+  });
+
+  it("ranks a top-versus-second pair above a middle pair when information gain matches", () => {
+    const n = 1025;
+    const eig = 0.4;
+    const at = (rank) => F.tailWeight((rank - 1) / (n - 1));
+    const topSecond = eig * F.pairTailMultiplier(at(1), at(2));
+    const middle = eig * F.pairTailMultiplier(at(512), at(513));
+    assert.ok(topSecond > middle);
+    assert.ok(Math.abs(F.pairTailMultiplier(1, 1) - 1) < 1e-12);
+    assert.ok(Math.abs(F.pairTailMultiplier(1, 0) - 0.6) < 1e-12);
+    assert.ok(Math.abs(F.pairTailMultiplier(0, 0) - 0.2) < 1e-12);
+
+    const model = {
+      ids: [1, 2, 3, 4, 5, 6, 7],
+      strength: [0, 0, 0, 0, 0, 0, 0],
+      offsetVar: [1, 1, 1, 1, 1, 1, 1],
+    };
+    const picked = F.selectNextPair(model, {
+      explore: 0,
+      topK: 1,
+      window: 7,
+      rng: F.mulberry32(9),
+    });
+    assert.deepEqual([picked.a, picked.b].slice().sort((a, b) => a - b), [1, 7]);
+  });
+
+  it("falls off smoothly past rank 10, with no cutoff there", () => {
+    const n = 1025;
+    const at = (rank) => F.tailWeight((rank - 1) / (n - 1));
+    const t1 = at(1);
+    const t10 = at(10);
+    const t11 = at(11);
+    const tThird = at(Math.round(n / 3));
+    assert.equal(t1, 1);
+    assert.ok(t1 > t10);
+    assert.ok(t10 > t11);
+    assert.ok(t10 - t11 < 0.001);
+    assert.ok(t11 > 0.99);
+    assert.ok(t11 > tThird + 0.7);
+    const step9 = at(9) - at(10);
+    const step10 = at(10) - at(11);
+    const step11 = at(11) - at(12);
+    assert.ok(step10 < step9 * 1.5);
+    assert.ok(step11 < step10 * 1.5);
   });
 });
 
@@ -132,7 +189,7 @@ function run(design, truth, rounds, mode, seed) {
       maxIter: 12,
     });
   }
-  return kendallTau(fit.strength, truth);
+  return endRankError(fit.strength, truth, 2);
 }
 
 function randomPair(ids, rng) {

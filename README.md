@@ -98,7 +98,7 @@ Direct matchups shrink it. The rankings page draws that sd as the uncertainty ba
 
 ### Which pair comes next
 
-The next duel maximizes expected information gain of one decisive comparison. With the Laplace posterior, the margin $\delta = s_i - s_j$ is approximately $\mathcal{N}(\mu, v)$, and the answer is a coin flip with probability $\sigma(\delta)$. The gain is the mutual information
+The next duel maximizes expected information gain of one decisive comparison, multiplied by a smooth weight so the ends of the current order are asked more often. With the Laplace posterior, the margin $\delta = s_i - s_j$ is approximately $\mathcal{N}(\mu, v)$, and the answer is a coin flip with probability $\sigma(\delta)$. The gain is the mutual information
 
 $$
 I(\theta; y) = H[y] - \mathbb{E}[H[y \mid \delta]].
@@ -106,7 +106,21 @@ $$
 
 $H[y]$ uses the integrated predictive probability, $\sigma\!\left(\mu / \sqrt{1 + \pi v / 8}\right)$. The expected conditional entropy is a 7-point Gauss–Hermite quadrature. Difference variance uses the trait coordinates of the weight covariance plus each offset's Laplace variance (offset correlations are the part this approximation drops).
 
-Scoring every pair of 1,025 species is unnecessary. Candidates are a window of neighbors in the current strength order, extra pairs among the least-certain species, and a few hundred random pairs (more while the ranking is still flat). An exploration draw, about 12% of the time, pairs a species that has been shown the least with someone else, so nobody is starved. Among the best few candidates the app picks at random, which keeps the next card from feeling like a fixed script. That shortlist scores in well under 100ms.
+That gain is then multiplied by where the two species sit. Rank 1 is the strongest (most favorite) and rank $n$ is the least favorite. For $n > 1$ — a single species has no pair —
+
+$$
+p = \frac{\mathrm{rank} - 1}{n - 1}, \qquad \mathrm{tail}(p) = \cos(\pi p)^2.
+$$
+
+$\mathrm{tail}(p)$ is 1 at both ends, 0 at the median, and symmetric: $\mathrm{tail}(p) = \mathrm{tail}(1 - p)$. A candidate pair $(i, j)$ scores
+
+$$
+m = 0.2 + 0.8 \cdot \frac{\mathrm{tail}_i + \mathrm{tail}_j}{2}, \qquad \mathrm{score} = I(\theta; y) \cdot m.
+$$
+
+Two extremes have $m$ near 1. A favorite against a median species is near 0.6. Two median species sit on the 0.2 floor, so a middle pair is still chosen when its gain is much larger. Rank 10 of 1,025 has tail about 0.999, rank 11 is only slightly lower, and rank 346 is about 0.24.
+
+Scoring every pair of 1,025 species is unnecessary. Candidates are a window of neighbors in the current strength order (28 places, so a species at either end is already compared with a run of neighbors), extra pairs among the least-certain species, and a few hundred random pairs (more while the ranking is still flat). The shortlist is ordered by the weighted score, and the random pick among the best few uses that same order. An exploration draw, about 12% of the time, pairs a species that has been shown the least with someone else, so nobody is starved. That draw stays unweighted. Among the best few candidates the app picks at random, which keeps the next card from feeling like a fixed script. That shortlist scores in well under 100ms.
 
 ### Why 8,800 is a floor, not a finish line
 
@@ -134,7 +148,7 @@ The checks use Node's built-in test runner. Node is only for that, and for rebui
 node --test
 ```
 
-The suite covers the fit (including a numerical gradient check at the mode), half-win ties, skips, multi-level undo, trait-weight learning, partial pooling, the Laplace prior variance, and pair selection. One simulation hides a true strength vector, answers with noisy Bradley–Terry preferences, and checks that information-gain pairing reaches a higher Kendall tau than random pairing after the same number of duels. Another checks that choosing the next pair among all 1,025 species stays under 100ms.
+The suite covers the fit (including a numerical gradient check at the mode), half-win ties, skips, multi-level undo, trait-weight learning, partial pooling, the Laplace prior variance, and pair selection. One simulation hides a true strength vector, answers with noisy Bradley–Terry preferences, and checks that tail-weighted pairing places the true favorites and least favorites closer to the ends than random pairing after the same number of duels. Whole-list Kendall tau is not that score: the weight spends comparisons on the ends, and on this 24-species run random pairing still agrees on more of the middle. Another checks that choosing the next pair among all 1,025 species stays under 100ms.
 
 ## Project layout
 

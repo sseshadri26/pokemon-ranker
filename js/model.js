@@ -1188,6 +1188,31 @@ function differenceVariance(model, i, j) {
     }
     return Math.max(v, 1e-8);
 }
+/**
+ * tail(p) = cos(π p)^2. p = 0 is the favorite, p = 1 the least favorite.
+ * 1 at both ends, 0 at the median, smooth, and symmetric in p and 1 − p.
+ */
+function tailWeight(p) {
+    const c = Math.cos(Math.PI * p);
+    return c * c;
+}
+/** m = 0.2 + 0.8 * (tail_i + tail_j) / 2. The floor keeps a median pair alive. */
+function pairTailMultiplier(tailA, tailB) {
+    return 0.2 + 0.8 * ((tailA + tailB) / 2);
+}
+function tailsInOrder(order) {
+    const n = order.length;
+    const tails = new Float64Array(n);
+    if (n <= 1)
+        return tails;
+    const span = n - 1;
+    for (let place = 0; place < n; place++) {
+        // order is weakest first, so place 0 is rank n and place n − 1 is rank 1.
+        const rank = n - place;
+        tails[order[place]] = tailWeight((rank - 1) / span);
+    }
+    return tails;
+}
 function selectNextPair(model, options = {}) {
     const n = model.ids.length;
     if (n < 2)
@@ -1198,22 +1223,25 @@ function selectNextPair(model, options = {}) {
     const topK = options.topK ?? 8;
     const avoid = options.avoid;
     const exploreDraw = rng() < explore;
+    // Unweighted on purpose: a least-shown species is still drawn from the middle.
     if (exploreDraw) {
         const picked = explorePair(model, options.games, rng, avoid);
         if (picked)
             return picked;
     }
     const order = orderByStrength(model.strength, n);
+    const tails = tailsInOrder(order);
     const candidates = collectCandidates(model, order, window, rng);
     let best = [];
     for (const [i, j] of candidates) {
         const mu = model.strength[i] - model.strength[j];
         const gain = expectedInformationGain(mu, differenceVariance(model, i, j));
-        best.push({ i, j, gain });
+        const score = gain * pairTailMultiplier(tails[i], tails[j]);
+        best.push({ i, j, gain, score });
     }
     if (best.length === 0)
         return null;
-    best.sort((p, q) => q.gain - p.gain);
+    best.sort((p, q) => q.score - p.score || q.gain - p.gain);
     if (avoid) {
         const filtered = best.filter((p) => !samePair(model.ids[p.i], model.ids[p.j], avoid));
         if (filtered.length > 0)
@@ -1463,6 +1491,8 @@ function strengthBreakdown(row, weights, network, offset, names) {
     parseHistory: parseHistory,
     rankingSummary: rankingSummary,
     differenceVariance: differenceVariance,
+    tailWeight: tailWeight,
+    pairTailMultiplier: pairTailMultiplier,
     selectNextPair: selectNextPair,
   };
 });
