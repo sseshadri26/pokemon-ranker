@@ -184,6 +184,29 @@ describe("Bradley–Terry fit", () => {
     assert.ok(after.confidence > before.confidence);
     assert.equal(after.matchups, 15);
   });
+
+  it("fits species strengths alone when the design has no columns", () => {
+    const species = [mono(1, "fire"), mono(2, "water"), mono(3, "fire")];
+    const comparisons = Array.from({ length: 40 }, () => ({ a: 1, b: 2, outcome: "a" }));
+    const traits = F.buildDesignMatrix(species, [F.typeExtractor]);
+    const empty = F.buildDesignMatrix(species, []);
+    assert.equal(empty.cols, 0);
+    const joint = F.fitBradleyTerry(traits, comparisons, { mlp: false });
+    const plain = F.fitBradleyTerry(empty, comparisons, { mlp: false });
+    const at = (fit, id) => fit.ids.indexOf(id);
+    assert.equal(plain.network, null);
+    assert.equal(plain.weights.length, 0);
+    assert.equal(plain.featureNames.length, 0);
+    assert.ok(plain.strength[at(plain, 1)] > plain.strength[at(plain, 2)]);
+    assert.ok(plain.strength[at(plain, 1)] > plain.strength[at(plain, 3)]);
+    closeTo(plain.strength[at(plain, 3)], 0, 8);
+    closeTo(plain.offset[at(plain, 3)], 0, 8);
+    closeTo(plain.sd[at(plain, 3)], plain.sigmaB, 6);
+    for (const id of [1, 2, 3]) closeTo(plain.strength[at(plain, id)], plain.offset[at(plain, id)], 8);
+    assert.ok(Math.abs(plain.strength[at(plain, 1)] - joint.offset[at(joint, 1)]) > 0.05);
+    assert.ok(joint.strength[at(joint, 3)] > joint.strength[at(joint, 2)]);
+    assert.ok(joint.strength[at(joint, 3)] > 0.2);
+  });
 });
 
 describe("trait features", () => {

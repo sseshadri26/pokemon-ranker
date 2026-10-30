@@ -6,7 +6,43 @@
   if (typeof module === "object" && module && module.exports) module.exports = api;
   root.FavordexRanker = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function (F) {
-  var STORAGE_KEY = "favordex.history.v1";
+  var STORAGE_KEY = "pokeranker.history.v1";
+  var RANKING_MODE_KEY = "pokeranker.ranking.v1";
+  // Keys from when the app was called Favordex. Read only when the new key is absent.
+  var LEGACY_KEYS = {
+    "pokeranker.history.v1": "favordex.history.v1",
+    "pokeranker.ranking.v1": "favordex.ranking.v1",
+    "pokeranker.dex.v1": "favordex.dex.v1",
+  };
+
+  // Reads a key, falling back to its old Favordex name so saved data survives the rename.
+  function readKey(store, key) {
+    var value = store.getItem(key);
+    if (value !== null && value !== undefined) return value;
+    var old = LEGACY_KEYS[key];
+    return old ? store.getItem(old) : null;
+  }
+
+  function entryKey(entry) {
+    return entry.a + "|" + entry.b + "|" + entry.outcome + "|" + entry.at;
+  }
+
+  // Append: keeps every current entry, adds imported ones that are not exact duplicates
+  // (same pair, outcome, and timestamp), and orders the result by time (stable).
+  function mergeHistory(current, incoming) {
+    var seen = new Set(current.map(entryKey));
+    var merged = current.slice();
+    incoming.forEach(function (entry) {
+      var key = entryKey(entry);
+      if (seen.has(key)) return;
+      seen.add(key);
+      merged.push(entry);
+    });
+    return merged
+      .map(function (entry, index) { return { entry: entry, index: index }; })
+      .sort(function (x, y) { return x.entry.at - y.entry.at || x.index - y.index; })
+      .map(function (item) { return item.entry; });
+  }
 
   // Same order and ids as Favordex.extendedExtractors. A new extractor belongs here too.
   var MODEL_CATEGORIES = [
@@ -342,7 +378,7 @@
     return {
       load: function () {
         try {
-          return localStorage.getItem(STORAGE_KEY);
+          return readKey(localStorage, STORAGE_KEY);
         } catch (error) {
           return null;
         }
@@ -377,6 +413,11 @@
     var byId = new Map(pokemon.map(function (p) { return [p.id, p]; }));
     var state = null;
     var lastFit = null;
+    var rankingMode = options.rankingMode === "bradley-terry" ? "bradley-terry" : "full";
+    var boardVisible = false;
+    var historyToken = 0;
+    var plainCache = null;
+    var fullRows = null;
 
     function persist() {
       if (!storage) return null;
@@ -386,6 +427,55 @@
       } catch (error) {
         return "Could not save to this browser's storage.";
       }
+    }
+
+    function rowsFrom(fit, games) {
+      var ranked = fit.ids.map(function (id, index) {
+        return {
+          pokemon: byId.get(id),
+          score: fit.strength[index],
+          sd: fit.sd[index],
+          games: games[index] || 0,
+        };
+      });
+      ranked.sort(function (a, b) {
+        return b.score - a.score || a.pokemon.id - b.pokemon.id;
+      });
+      return ranked.map(function (row, index) {
+        return {
+          pokemon: row.pokemon,
+          score: row.score,
+          sd: row.sd,
+          games: row.games,
+          rank: index + 1,
+        };
+      });
+    }
+
+    // Species offsets only. No trait columns and no network, so s_i = b_i.
+    // This is a separate fit from the joint model: those offsets were shrunk by x·w and EV.
+    function plainDesign() {
+      return {
+        ids: design.ids,
+        names: [],
+        values: new Float64Array(0),
+        rows: design.rows,
+        cols: 0,
+      };
+    }
+
+    function ensurePlain() {
+      if (plainCache && plainCache.token === historyToken) return plainCache;
+      var fit = F.fitBradleyTerry(plainDesign(), F.ratedComparisons(history), {
+        mlp: false,
+        maxIter: Math.max(options.maxIter || 0, 24),
+      });
+      plainCache = {
+        token: historyToken,
+        fit: fit,
+        rows: rowsFrom(fit, F.comparisonCounts(history, fit.ids)),
+      };
+      return plainCache;
     }
 
     function recompute() {
@@ -428,29 +518,17 @@
           rng: options.rng,
         },
       );
-      var ranked = fit.ids.map(function (id, index) {
-        return {
-          pokemon: byId.get(id),
-          score: fit.strength[index],
-          sd: fit.sd[index],
-          games: games[index] || 0,
-        };
-      });
-      ranked.sort(function (a, b) {
-        return b.score - a.score || a.pokemon.id - b.pokemon.id;
-      });
+      fullRows = rowsFrom(fit, games);
+      var rows = fullRows;
+      if (rankingMode === "bradley-terry" || boardVisible) {
+        var plain = ensurePlain();
+        if (rankingMode === "bradley-terry") rows = plain.rows;
+      }
       state = {
         history: history.slice(),
         pair: pair,
-        rows: ranked.map(function (row, index) {
-          return {
-            pokemon: row.pokemon,
-            score: row.score,
-            sd: row.sd,
-            games: row.games,
-            rank: index + 1,
-          };
-        }),
+        rows: rows,
+        rankingMode: rankingMode,
         summary: summary,
         model: modelReport(fit),
         leans: fit.featureNames
@@ -466,6 +544,7 @@
 
     function commit(next) {
       history = next;
+      historyToken += 1;
       var err = persist();
       if (err) notice = err;
       return recompute();
@@ -595,10 +674,18 @@
         release();
         return state;
       },
-      importText: function (text) {
-        var next = F.parseHistory(text);
+      importText: function (text, mode) {
+        var incoming = F.parseHistory(text);
+        var next = incoming;
         lock = true;
-        notice = "Imported " + next.length.toLocaleString() + " answers.";
+        if (mode === "append") {
+          next = mergeHistory(history, incoming);
+          var added = next.length - history.length;
+          notice = "Added " + added.toLocaleString() + " of " + incoming.length.toLocaleString() +
+            " imported answers" + (added < incoming.length ? " (" + (incoming.length - added).toLocaleString() + " already here)." : ".");
+        } else {
+          notice = "Imported " + next.length.toLocaleString() + " answers.";
+        }
         commit(next);
         release();
         return state;
@@ -611,11 +698,31 @@
         state.notice = message;
         return state;
       },
+      setRankingMode: function (mode) {
+        if (mode !== "full" && mode !== "bradley-terry") return state;
+        if (mode === rankingMode) return state;
+        rankingMode = mode;
+        state.rankingMode = mode;
+        state.rows = mode === "bradley-terry" ? ensurePlain().rows : fullRows;
+        return state;
+      },
+      setBoardVisible: function (visible) {
+        var next = Boolean(visible);
+        if (next === boardVisible) {
+          if (next && (!plainCache || plainCache.token !== historyToken)) ensurePlain();
+          return state;
+        }
+        boardVisible = next;
+        if (boardVisible) ensurePlain();
+        return state;
+      },
       speciesDetail: function (id) {
         if (!lastFit || !state || !byId.has(id)) return null;
+        var plain = rankingMode === "bradley-terry";
+        var active = plain ? ensurePlain().fit : lastFit;
         var index = -1;
-        for (var i = 0; i < lastFit.ids.length; i++) {
-          if (lastFit.ids[i] === id) {
+        for (var i = 0; i < active.ids.length; i++) {
+          if (active.ids[i] === id) {
             index = i;
             break;
           }
@@ -624,8 +731,11 @@
         var cols = design.cols;
         var row = new Array(cols);
         var base = index * cols;
-        for (var k = 0; k < cols; k++) row[k] = design.values[base + k];
-        var parts = F.strengthBreakdown(row, lastFit.weights, lastFit.network, lastFit.offset[index], design.names);
+        var parts = null;
+        if (!plain) {
+          for (var k = 0; k < cols; k++) row[k] = design.values[base + k];
+          parts = F.strengthBreakdown(row, lastFit.weights, lastFit.network, lastFit.offset[index], design.names);
+        }
         var mon = byId.get(id);
         var ranked = null;
         for (var r = 0; r < state.rows.length; r++) {
@@ -634,7 +744,7 @@
             break;
           }
         }
-        var strength = ranked ? ranked.score : lastFit.strength[index];
+        var strength = ranked ? ranked.score : active.strength[index];
         var record = speciesRecord(history, id, byId);
         var forms = [];
         if (mon.forms && mon.forms.length) {
@@ -654,7 +764,7 @@
           forms: forms,
           rank: ranked ? ranked.rank : null,
           strength: strength,
-          sd: ranked ? ranked.sd : lastFit.sd[index],
+          sd: ranked ? ranked.sd : active.sd[index],
           games: ranked ? ranked.games : 0,
           record: {
             wins: record.wins,
@@ -663,11 +773,12 @@
             skips: record.skips,
           },
           matchups: record.matchups,
-          linear: parts.linear,
-          ev: parts.ev,
-          offset: parts.offset,
-          partsMatch: Math.abs(parts.strength - strength) <= 1e-6,
-          categories: groupContributions(parts.columns),
+          ranking: plain ? "bradley-terry" : "full",
+          linear: plain ? 0 : parts.linear,
+          ev: plain ? 0 : parts.ev,
+          offset: plain ? active.offset[index] : parts.offset,
+          partsMatch: plain ? true : Math.abs(parts.strength - strength) <= 1e-6,
+          categories: plain ? [] : groupContributions(parts.columns),
         };
       },
     };
@@ -676,6 +787,10 @@
   return {
     createRanker: createRanker,
     STORAGE_KEY: STORAGE_KEY,
+    RANKING_MODE_KEY: RANKING_MODE_KEY,
+    LEGACY_KEYS: LEGACY_KEYS,
+    readKey: readKey,
+    mergeHistory: mergeHistory,
     toTrait: toTrait,
     MODEL_CATEGORIES: MODEL_CATEGORIES,
   };

@@ -419,6 +419,33 @@ kbd {
   letter-spacing: 0;
   font-size: 1rem;
 }
+.rank-mode {
+  display: grid;
+  gap: 6px;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rank-mode div {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.rank-mode button {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 8px 14px;
+  font-size: 1rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.rank-mode button.on {
+  background: var(--ink);
+  color: var(--bg);
+}
 .shown { margin: 0 0 2px auto; color: var(--muted); }
 .leans { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; color: var(--muted); }
 .leans .up { color: var(--moss); }
@@ -1506,6 +1533,13 @@ html[data-dex="9"] .card {
   background: rgba(255, 255, 255, 0.72);
   box-shadow: none;
 }
+/* Ruled paper uses a transparent card. Dialogs sit on a dark scrim, so they need an opaque page. */
+html[data-dex="9"] .species-sheet,
+html[data-dex="9"] .modal > div {
+  --card: #fffaf3;
+  background: #fffaf3;
+  color: #241c16;
+}
 
 @media (max-width: 900px) {
   header { grid-template-columns: 1fr; gap: 16px; }
@@ -1683,6 +1717,11 @@ body.view-duel .stage {
   min-height: 0;
   grid-template-columns: minmax(0, 1fr) 112px minmax(0, 1fr);
   gap: 8px;
+}
+body.view-duel #card-a,
+body.view-duel #card-b,
+body.view-duel .versus {
+  min-height: 0;
 }
 body.view-duel .card { padding: 8px; min-height: 0; overflow: hidden; }
 body.view-duel .pick { min-height: 0; height: 100%; overflow: visible; }

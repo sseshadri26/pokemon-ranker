@@ -2,7 +2,7 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { createRanker, STORAGE_KEY, MODEL_CATEGORIES } = require("../js/ranker.js");
+const { createRanker, STORAGE_KEY, RANKING_MODE_KEY, MODEL_CATEGORIES } = require("../js/ranker.js");
 const F = require("../js/model.js");
 
 function mon(id, name, type) {
@@ -407,6 +407,75 @@ describe("ranker session", () => {
   });
 });
 
+describe("Bradley–Terry ranking order", () => {
+  it("follows the comparisons and ignores a trait the full model rewards", () => {
+    assert.equal(RANKING_MODE_KEY, "pokeranker.ranking.v1");
+    const history = Array.from({ length: 40 }, (_, i) => ({ a: 1, b: 2, outcome: "a", at: i + 1 }));
+    const store = memory();
+    store.raw = JSON.stringify(history);
+    const ranker = createRanker(
+      [mon(1, "A", "fire"), mon(2, "B", "water"), mon(3, "C", "fire")],
+      { storage: store, extractors: [F.typeExtractor], mlp: false, explore: 0, rng: () => 0.5 },
+    );
+    function row(name) {
+      return ranker.getState().rows.find((entry) => entry.pokemon.name === name);
+    }
+    const fullA = row("A");
+    const fullB = row("B");
+    const fullC = row("C");
+    assert.ok(fullA.score > fullB.score);
+    assert.ok(fullC.score > fullB.score);
+    assert.ok(fullC.score > 0.2);
+    const fullDetailA = ranker.speciesDetail(1);
+    const fullDetailC = ranker.speciesDetail(3);
+    assert.equal(fullDetailC.ranking, "full");
+    assert.ok(fullDetailC.categories.some((category) => category.id === "type"));
+    assert.ok(Math.abs(fullDetailA.linear + fullDetailA.ev + fullDetailA.offset - fullDetailA.strength) < 1e-6);
+
+    const before = JSON.stringify(ranker.getState().history);
+    const pair = { a: ranker.getState().pair.a, b: ranker.getState().pair.b };
+    const saved = store.raw;
+    ranker.setRankingMode("bradley-terry");
+    ranker.setRankingMode("full");
+    ranker.setRankingMode("bradley-terry");
+    assert.equal(JSON.stringify(ranker.getState().history), before);
+    assert.equal(ranker.getState().history.length, 40);
+    assert.equal(store.raw, saved);
+    assert.deepEqual({ a: ranker.getState().pair.a, b: ranker.getState().pair.b }, pair);
+
+    const plainA = row("A");
+    const plainB = row("B");
+    const plainC = row("C");
+    assert.ok(plainA.score > plainB.score);
+    assert.ok(plainA.score > plainC.score);
+    assert.ok(plainA.rank < plainC.rank);
+    assert.ok(Math.abs(plainC.score) < 1e-8);
+    assert.ok(Math.abs(plainC.sd - 1) < 1e-6);
+    assert.ok(plainC.score < fullC.score - 0.2);
+
+    const plainDetailA = ranker.speciesDetail(1);
+    const plainDetailC = ranker.speciesDetail(3);
+    assert.equal(plainDetailA.ranking, "bradley-terry");
+    assert.equal(plainDetailC.categories.length, 0);
+    assert.equal(plainDetailC.record.wins, 0);
+    assert.equal(plainDetailA.record.wins, 40);
+    assert.ok(Math.abs(plainDetailC.strength) < 1e-8);
+    assert.ok(Math.abs(plainDetailC.offset - plainDetailC.strength) < 1e-9);
+    assert.ok(Math.abs(plainDetailC.sd - 1) < 1e-6);
+    assert.ok(Math.abs(plainDetailA.strength - fullDetailA.offset) > 0.05);
+    assert.ok(Math.abs(plainDetailA.strength - plainDetailA.offset) < 1e-9);
+
+    ranker.setRankingMode("full");
+    assert.equal(ranker.getState().history.length, 40);
+    assert.equal(store.raw, saved);
+    assert.ok(Math.abs(row("C").score - fullC.score) < 1e-9);
+    const restored = ranker.speciesDetail(3);
+    assert.equal(restored.ranking, "full");
+    assert.ok(restored.categories.some((category) => category.id === "type"));
+    assert.ok(Math.abs(restored.linear + restored.ev + restored.offset - restored.strength) < 1e-6);
+  });
+});
+
 describe("page files", () => {
   it("loads with relative scripts and artwork, and keeps the storage key", () => {
     const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
@@ -414,6 +483,10 @@ describe("page files", () => {
     assert.match(html, /src="js\/model\.js"/);
     assert.match(html, /src="js\/app\.js"/);
     assert.match(html, /id="view-model"/);
+    assert.match(html, /id="rank-full"/);
+    assert.match(html, />Full model</);
+    assert.match(html, /id="rank-bt"/);
+    assert.match(html, />Bradley–Terry</);
     assert.match(html, /id="model"/);
     assert.match(html, /id="model-network"/);
     assert.match(html, /Hierarchical Bradley–Terry/);
@@ -440,6 +513,10 @@ describe("page files", () => {
     assert.equal(html.includes("/src/"), false);
     assert.equal(html.includes("type=\"module\""), false);
     const app = fs.readFileSync(path.join(__dirname, "..", "js", "app.js"), "utf8");
+    assert.match(app, /getElementById\("rank-full"\)/);
+    assert.match(app, /getElementById\("rank-bt"\)/);
+    assert.match(app, /setRankingMode/);
+    assert.match(app, /species-plain/);
     assert.match(app, /getElementById\("data-menu"\)/);
     assert.match(app, /getElementById\("data-panel"\)/);
     assert.match(app, /getElementById\("data-close"\)/);
@@ -450,6 +527,6 @@ describe("page files", () => {
     assert.equal(app.includes("network.units"), false);
     assert.match(app, /return "artwork\/" \+ file/);
     assert.equal(app.includes('"/artwork/'), false);
-    assert.equal(STORAGE_KEY, "favordex.history.v1");
+    assert.equal(STORAGE_KEY, "pokeranker.history.v1");
   });
 });

@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Favordex</title>
+  <title>PokeRanker</title>
   <link rel="icon" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
   <script>
     try {
-      var savedDex = localStorage.getItem("favordex.dex.v1");
+      var savedDex = localStorage.getItem("pokeranker.dex.v1");
+      if (savedDex === null) savedDex = localStorage.getItem("favordex.dex.v1");
       document.documentElement.dataset.dex = /^[1-9]$/.test(savedDex || "") ? savedDex : "1";
     } catch (error) {
       document.documentElement.dataset.dex = "1";
@@ -47,7 +48,7 @@
     <header>
       <div class="brand">
         <p class="eyebrow">National Dex, by affection</p>
-        <h1>Favordex</h1>
+        <h1>PokeRanker</h1>
       </div>
       <div class="progress">
         <p data-testid="matchup-count" id="matchup-count">0 matchups</p>
@@ -78,7 +79,7 @@
           <p class="swipe-hint" id="swipe-hint">Swipe or tap</p>
           <button type="button" class="ghost" data-testid="tie" id="tie">Tie <kbd>↓</kbd></button>
           <button type="button" class="texty" data-testid="skip" id="skip">Skip <kbd>↑</kbd></button>
-          <button type="button" class="texty" data-testid="undo" id="undo">Undo <kbd>⌫</kbd></button>
+          <button type="button" class="texty" data-testid="undo" id="undo">Undo <kbd>Z</kbd></button>
         </div>
         <div id="card-b"></div>
       </div>
@@ -105,6 +106,13 @@
             <option value="all">All generations</option>
           </select>
         </label>
+        <div class="rank-mode" role="group" aria-label="Ranking order">
+          <span>Order</span>
+          <div>
+            <button type="button" id="rank-full" aria-pressed="true">Full model</button>
+            <button type="button" id="rank-bt" aria-pressed="false">Bradley–Terry</button>
+          </div>
+        </div>
         <p class="shown" id="shown"></p>
       </div>
       <p class="leans" id="leans" hidden></p>
@@ -215,6 +223,17 @@
       <div class="modal-actions">
         <button type="button" id="keep">Keep them</button>
         <button type="button" class="danger" id="confirm-reset">Reset</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" id="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title" hidden>
+    <div>
+      <h2 id="import-title">Import answers</h2>
+      <p>Append adds the file's answers to the ones in this browser and skips exact duplicates. Replace erases the current answers and keeps only the file's. Export first if you want a copy.</p>
+      <div class="modal-actions">
+        <button type="button" id="import-cancel">Cancel</button>
+        <button type="button" id="import-append">Append</button>
+        <button type="button" class="danger" id="import-replace">Replace</button>
       </div>
     </div>
   </div>
