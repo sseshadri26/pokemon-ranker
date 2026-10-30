@@ -47,12 +47,15 @@ describe("ranker session", () => {
     ranker.answer("b");
     ranker.answer("tie");
     assert.equal(ranker.getState().summary.matchups, 3);
+    const savedBeforeSkip = store.raw;
     ranker.answer("skip");
     assert.equal(ranker.getState().summary.matchups, 3);
-    ranker.undoLast();
-    assert.equal(ranker.getState().summary.matchups, 3);
+    assert.equal(ranker.getState().history.length, 3);
+    assert.equal(store.raw, savedBeforeSkip);
+    assert.equal(ranker.exportText().includes('"skip"'), false);
     ranker.undoLast();
     assert.equal(ranker.getState().summary.matchups, 2);
+    assert.equal(ranker.getState().history.at(-1).outcome, "b");
     assert.equal(store.raw.includes('"skip"'), false);
     assert.equal(JSON.parse(store.raw).length, 2);
   });
@@ -98,16 +101,12 @@ describe("ranker session", () => {
     ranker.answer("b");
     const afterRestored = { a: ranker.getState().pair.a, b: ranker.getState().pair.b };
     assert.ok(afterRestored.a !== first.a || afterRestored.b !== first.b);
+    const skipped = { a: ranker.getState().pair.a, b: ranker.getState().pair.b };
     ranker.answer("skip");
-    const skipped = ranker.getState().history.at(-1);
-    assert.equal(skipped.outcome, "skip");
+    assert.equal(ranker.getState().history.length, 1);
     const shownAfterSkip = { a: ranker.getState().pair.a, b: ranker.getState().pair.b };
     assert.ok(shownAfterSkip.a !== skipped.a || shownAfterSkip.b !== skipped.b);
-    ranker.undoLast();
-    assert.deepEqual(
-      { a: ranker.getState().pair.a, b: ranker.getState().pair.b },
-      { a: skipped.a, b: skipped.b },
-    );
+    // Undo takes back the real vote, not the skip.
     ranker.undoLast();
     assert.deepEqual(
       { a: ranker.getState().pair.a, b: ranker.getState().pair.b },
@@ -246,7 +245,6 @@ describe("ranker session", () => {
     const store = memory();
     store.raw = JSON.stringify([
       { a: 1, b: 2, outcome: "a", at: 1 },
-      { a: 2, b: 3, outcome: "skip", at: 2 },
       { a: 3, b: 1, outcome: "b", at: 3 },
     ]);
     const ranker = createRanker(roster, {
@@ -266,7 +264,6 @@ describe("ranker session", () => {
     const stored = JSON.parse(store.raw);
     assert.deepEqual(stored, [
       { a: 1, b: 2, outcome: "b", at: 1 },
-      { a: 2, b: 3, outcome: "skip", at: 2 },
       { a: 3, b: 1, outcome: "b", at: 3 },
     ]);
     assert.deepEqual(ranker.getState().history, stored);
@@ -283,14 +280,7 @@ describe("ranker session", () => {
     );
 
     assert.equal(gamesOf(2), 1);
-    ranker.editOutcome(1, "tie");
-    assert.equal(ranker.getState().history[1].outcome, "tie");
-    assert.equal(ranker.getState().history[1].at, 2);
-    assert.equal(ranker.getState().history[1].a, 2);
-    assert.equal(ranker.getState().history[1].b, 3);
-    assert.equal(ranker.getState().summary.matchups, 3);
-    assert.equal(gamesOf(2), 2);
-    assert.equal(F.ratedComparisons(F.parseHistory(ranker.exportText())).length, 3);
+    assert.equal(F.ratedComparisons(F.parseHistory(ranker.exportText())).length, 2);
 
     ranker.editOutcome(0, "skip");
     ranker.editOutcome(0, "maybe");
@@ -298,10 +288,10 @@ describe("ranker session", () => {
     assert.equal(JSON.parse(store.raw)[0].outcome, "b");
 
     ranker.queuePair(1, 3);
-    ranker.editOutcome(2, "tie");
+    ranker.editOutcome(1, "tie");
     assert.deepEqual([ranker.getState().pair.a, ranker.getState().pair.b], [1, 3]);
-    assert.equal(ranker.getState().history[2].at, 3);
-    assert.equal(ranker.getState().history[2].outcome, "tie");
+    assert.equal(ranker.getState().history[1].at, 3);
+    assert.equal(ranker.getState().history[1].outcome, "tie");
   });
 
   it("deletes a middle vote and leaves a pinned duel where it is", () => {

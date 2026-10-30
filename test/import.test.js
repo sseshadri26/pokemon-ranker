@@ -52,9 +52,24 @@ describe("history merge", () => {
     const file = path.join(__dirname, "..", "favordex-history.json");
     if (!fs.existsSync(file)) return;
     const ranker = createRanker([mon(1, "A", "fire"), mon(2, "B", "water")], { storage: null, mlp: false, explore: 0, rng: () => 0.5 });
-    const count = JSON.parse(fs.readFileSync(file, "utf8")).history.length;
+    const count = JSON.parse(fs.readFileSync(file, "utf8")).history.filter((e) => e.outcome !== "skip").length;
     ranker.importText(fs.readFileSync(file, "utf8"), "append");
     assert.equal(ranker.getState().history.length, count);
+    assert.equal(ranker.getState().history.some((e) => e.outcome === "skip"), false);
+  });
+
+  it("drops skips from imports (append and replace) and from saved history", () => {
+    const skipFile = JSON.stringify([e(1, 2, "a", 1), e(2, 3, "skip", 2), e(1, 3, "tie", 3)]);
+    const store = memory(skipFile);
+    const ranker = createRanker([mon(1, "A", "fire"), mon(2, "B", "water"), mon(3, "C", "grass")],
+      { storage: store, explore: 0, rng: () => 0.5, mlp: false });
+    assert.equal(ranker.getState().history.length, 2);
+    assert.equal(store.raw.includes("skip"), false);
+    ranker.importText(JSON.stringify([e(2, 3, "skip", 9), e(2, 3, "b", 10)]), "append");
+    assert.deepEqual(ranker.getState().history.map((x) => x.outcome), ["a", "tie", "b"]);
+    ranker.importText(skipFile, "replace");
+    assert.deepEqual(ranker.getState().history.map((x) => x.outcome), ["a", "tie"]);
+    assert.equal(ranker.exportText().includes("skip"), false);
   });
 });
 

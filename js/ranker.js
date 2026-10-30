@@ -29,6 +29,11 @@
 
   // Append: keeps every current entry, adds imported ones that are not exact duplicates
   // (same pair, outcome, and timestamp), and orders the result by time (stable).
+  // Skips are not votes. Older saves and exports contain them; they are dropped on load.
+  function dropSkips(history) {
+    return history.filter(function (entry) { return entry.outcome !== "skip"; });
+  }
+
   function mergeHistory(current, incoming) {
     var seen = new Set(current.map(entryKey));
     var merged = current.slice();
@@ -418,6 +423,7 @@
     var historyToken = 0;
     var plainCache = null;
     var fullRows = null;
+    var lastGames = null;
 
     function persist() {
       if (!storage) return null;
@@ -504,20 +510,8 @@
       var forcedPair = forced && forced.a !== forced.b && byId.has(forced.a) && byId.has(forced.b)
         ? { a: forced.a, b: forced.b }
         : null;
-      var pair = forcedPair || F.selectNextPair(
-        {
-          ids: fit.ids,
-          strength: fit.strength,
-          offsetVar: fit.offsetVar,
-          traitCoords: fit.traitCoords,
-        },
-        {
-          explore: options.explore === undefined ? 0.12 : options.explore,
-          games: games,
-          avoid: last ? [last.a, last.b] : undefined,
-          rng: options.rng,
-        },
-      );
+      lastGames = games;
+      var pair = forcedPair || pickPair(fit, games, last ? [last.a, last.b] : undefined);
       fullRows = rowsFrom(fit, games);
       var rows = fullRows;
       if (rankingMode === "bradley-terry" || boardVisible) {
@@ -542,6 +536,23 @@
       return state;
     }
 
+    function pickPair(fit, games, avoid) {
+      return F.selectNextPair(
+        {
+          ids: fit.ids,
+          strength: fit.strength,
+          offsetVar: fit.offsetVar,
+          traitCoords: fit.traitCoords,
+        },
+        {
+          explore: options.explore === undefined ? 0.12 : options.explore,
+          games: games,
+          avoid: avoid,
+          rng: options.rng,
+        },
+      );
+    }
+
     function commit(next) {
       history = next;
       historyToken += 1;
@@ -557,7 +568,9 @@
     if (storage) {
       try {
         var raw = storage.load();
-        history = raw ? F.parseHistory(raw) : [];
+        history = raw ? dropSkips(F.parseHistory(raw)) : [];
+        // Older saves recorded skips. Rewrite the store without them.
+        if (raw && history.length !== F.parseHistory(raw).length) persist();
       } catch (error) {
         history = [];
       }
@@ -573,6 +586,13 @@
       },
       answer: function (outcome) {
         if (!state.pair || lock) return state;
+        if (outcome === "skip") {
+          // A skip only moves on. Nothing is recorded, saved, or fitted; the skipped
+          // pair is avoided for the next draw, in memory only.
+          forced = null;
+          state.pair = pickPair(lastFit, lastGames, [state.pair.a, state.pair.b]);
+          return state;
+        }
         lock = true;
         forced = null;
         commit(history.concat([{
@@ -675,7 +695,7 @@
         return state;
       },
       importText: function (text, mode) {
-        var incoming = F.parseHistory(text);
+        var incoming = dropSkips(F.parseHistory(text));
         var next = incoming;
         lock = true;
         if (mode === "append") {
@@ -791,6 +811,7 @@
     LEGACY_KEYS: LEGACY_KEYS,
     readKey: readKey,
     mergeHistory: mergeHistory,
+    dropSkips: dropSkips,
     toTrait: toTrait,
     MODEL_CATEGORIES: MODEL_CATEGORIES,
   };

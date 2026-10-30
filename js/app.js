@@ -314,6 +314,30 @@
     });
   }
 
+  // Many forms: a tight grid that fills the square portrait. Columns = ceil(sqrt(n)) maximises
+  // the cell size in a square; a short last row is centred. Each sprite is scaled so its opaque
+  // (ink) box fills its cell, with a little overlap so transparent corners don't read as gaps.
+  function placeGrid(boxes, weights) {
+    var count = boxes.length;
+    var cols = Math.ceil(Math.sqrt(count));
+    var rows = Math.ceil(count / cols);
+    var cellW = 100 / cols;
+    var cellH = 100 / rows;
+    var cell = Math.min(cellW, cellH);
+    var top = (100 - cell * rows) / 2;
+    var overlap = count >= 9 ? 1.12 : 1.04;
+    return boxes.map(function (box, index) {
+      var row = Math.floor(index / cols);
+      var col = index % cols;
+      var inRow = row === rows - 1 ? count - row * cols : cols;
+      var left = (100 - cell * inRow) / 2;
+      var bw = Math.max(0.05, box.r - box.l);
+      var bh = Math.max(0.05, box.b - box.t);
+      var scale = Math.min(cell / bw, cell / bh) / 100 * overlap * weights[index];
+      return spriteFromOpaque(left + cell * (col + 0.5), top + cell * (row + 0.5), scale, box);
+    });
+  }
+
   function placeForms(forms) {
     var count = forms.length;
     if (count <= 1) return [{ x: 50, y: 50, scale: 1 }];
@@ -324,9 +348,10 @@
       if (compact[i]) continue;
       if (hero < 0 || forms[i].kind === "default") hero = i;
     }
-    if (hero >= 0 && compact.some(Boolean)) return placeHero(boxes, compact, hero);
+    if (hero >= 0 && compact.some(Boolean) && count <= 5) return placeHero(boxes, compact, hero);
     if (count === 2) return placeEqualPair(boxes);
     var weights = compact.map(function (isSmall) { return isSmall ? 0.62 : 1; });
+    if (count >= 4) return placeGrid(boxes, weights);
     return placeRing(boxes, weights);
   }
 
@@ -363,7 +388,7 @@
         return "<li>" + esc(entry.name) + "</li>";
       }).join("") + "</ol>";
     }
-    var layout = forms.length <= 1 ? "single" : forms.length === 2 ? "pair" : forms.length === 3 ? "triangle" : forms.length === 4 ? "diamond" : "circle";
+    var layout = forms.length <= 1 ? "single" : forms.length === 2 ? "pair" : forms.length === 3 ? "triangle" : "grid";
     return '<article class="card ' + side + '">' +
       '<button type="button" class="pick" data-testid="' + testId + '" data-side="' + side +
       '" aria-label="' + esc(aria) + '">' +
@@ -597,7 +622,7 @@
       fact("Decisive win", "logistic of <code>" + esc(model.probability) + "</code>") +
       fact("Weight prior", "normal, sd " + model.sigmaW.toFixed(2)) +
       fact("Offset prior", "normal, sd " + model.sigmaB.toFixed(2) + ", one per species") +
-      fact("Answers in the fit", model.comparisons.toLocaleString() + " (skips left out)") +
+      fact("Answers in the fit", model.comparisons.toLocaleString()) +
       fact("Newton steps", String(model.iterations) + (model.converged ? ", converged" : ", still moving")) +
       fact("Columns in x", model.columns.toLocaleString()) +
       networkFact;
@@ -877,9 +902,8 @@
       "<li>" + countLabel(detail.record.wins, "win", "wins") + "</li>" +
       "<li>" + countLabel(detail.record.losses, "loss", "losses") + "</li>" +
       "<li>" + countLabel(detail.record.ties, "tie", "ties") + "</li>" +
-      "<li>" + countLabel(detail.record.skips, "skip", "skips") + "</li>" +
       "</ul>" +
-      '<p>' + countLabel(detail.games, "matchup", "matchups") + " in the ranking. Skips stay in the record and out of the fit.</p>" +
+      '<p>' + countLabel(detail.games, "matchup", "matchups") + " in the ranking.</p>" +
       '<section data-testid="species-matchups"><h3 class="species-sub">Matchups</h3>' + matchups + "</section>" +
       breakdown;
     els.speciesPanel.hidden = false;

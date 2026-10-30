@@ -13,6 +13,7 @@
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { applyZaMegas, downloadPortrait, sortForms } from "./za-megas.mjs";
+import { pruneForms } from "./redundant-forms.mjs";
 
 const ENDPOINT = "https://beta.pokeapi.co/graphql/v1beta";
 const SPRITE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon";
@@ -157,7 +158,14 @@ function artworkUrls({ pokemonId, formName, hiresFirst }) {
     urls.push(`${SPRITE}/other/official-artwork/${pokemonId}.png`);
     urls.push(`${SPRITE}/other/home/${pokemonId}.png`);
   }
-  if (formName) urls.push(`${SPRITE}/${pokemonId}-${formName}.png`);
+  if (formName) {
+    // Cosmetic forms (Unown, Vivillon, Alcremie...) have official art or a HOME render
+    // under {pokemonId}-{formName}. Prefer those to the 96px game sprite.
+    // scripts/upgrade-form-art.mjs applies the same upgrade to an existing artwork folder.
+    urls.push(`${SPRITE}/other/official-artwork/${pokemonId}-${formName}.png`);
+    urls.push(`${SPRITE}/other/home/${pokemonId}-${formName}.png`);
+    urls.push(`${SPRITE}/${pokemonId}-${formName}.png`);
+  }
   urls.push(`${SPRITE}/${pokemonId}.png`);
   if (!hiresFirst) urls.push(`${SPRITE}/other/official-artwork/${pokemonId}.png`);
   return [...new Set(urls)];
@@ -330,7 +338,8 @@ async function main() {
   process.stdout.write("\n");
 
   const pokemon = drafted.map((species) => {
-    const forms = species.forms.flatMap((form) => {
+    // Totems and other look-alike forms are merged away (see redundant-forms.mjs).
+    const forms = pruneForms(species.forms).flatMap((form) => {
       const meta = saved.get(form._job.file);
       if (meta?.drop) return [];
       const art = meta ? form.art : null;

@@ -83,7 +83,7 @@ describe("strength breakdown", () => {
 });
 
 describe("species detail", () => {
-  it("counts a win, a tie, and a skip, and names those opponents newest first", () => {
+  it("counts a win and a tie, drops an old saved skip, and names those opponents newest first", () => {
     const roster = [mon(1, "A", "fire"), mon(2, "B", "water"), mon(3, "C", "grass"), mon(4, "D", "electric")];
     const store = memory(JSON.stringify([
       { a: 1, b: 2, outcome: "a", at: 1000 },
@@ -100,13 +100,14 @@ describe("species detail", () => {
     const before = ranker.getState();
     const detail = ranker.speciesDetail(1);
     assert.equal(ranker.getState(), before);
-    assert.equal(before.history.length, 3);
+    assert.equal(before.history.length, 2);
     assert.equal(detail.record.wins, 1);
     assert.equal(detail.record.losses, 0);
     assert.equal(detail.record.ties, 1);
-    assert.equal(detail.record.skips, 1);
-    assert.deepEqual(detail.matchups.map((bout) => bout.opponent), ["D", "C", "B"]);
-    assert.deepEqual(detail.matchups.map((bout) => bout.result), ["skip", "tie", "won"]);
+    assert.equal(detail.record.skips, 0);
+    assert.deepEqual(detail.matchups.map((bout) => bout.opponent), ["C", "B"]);
+    assert.deepEqual(detail.matchups.map((bout) => bout.result), ["tie", "won"]);
+    assert.equal(JSON.parse(store.raw).length, 2);
     assert.equal(detail.games, 2);
 
     const beaten = ranker.speciesDetail(2);

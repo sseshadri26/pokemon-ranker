@@ -36,7 +36,7 @@ The main form fills the middle of the picture. A Mega or Gigantamax form is smal
 
 **Model** names the predictor: hierarchical Bradley–Terry, strength `s = x·w + b`, the normal priors on the weights and the species offsets, and the alternating Newton fit. Under that it lists every trait category in `x` — type, generation, color, shape, habitat, egg group, legendary, mythical, baby, evolution stage, and starter — and the learned weight and Laplace standard deviation of each column.
 
-**Data** opens Export, Import, and Reset. **Export** downloads the full answer history as JSON. **Import** reads a JSON export (including older `favordex-history.json` files) and asks whether to **Append** — merge into the current history, skipping exact duplicates (same pair, outcome, and timestamp) and ordering by time — or **Replace** the current history with the file's. **Reset** clears it. History lives in `localStorage` under `pokeranker.history.v1` (an existing `favordex.history.v1` from before the rename is read when the new key is absent). Skips are kept in that log so they can be undone and round-tripped, and they do not affect scores.
+**Data** opens Export, Import, and Reset. **Export** downloads the full answer history as JSON. **Import** reads a JSON export (including older `favordex-history.json` files) and asks whether to **Append** — merge into the current history, skipping exact duplicates (same pair, outcome, and timestamp) and ordering by time — or **Replace** the current history with the file's. **Reset** clears it. History lives in `localStorage` under `pokeranker.history.v1` (an existing `favordex.history.v1` from before the rename is read when the new key is absent). Skips are not stored.
 
 ## The model
 
@@ -58,7 +58,7 @@ $$
 \tfrac{1}{2}\log \sigma(s_i-s_j) + \tfrac{1}{2}\log \sigma(s_j-s_i),
 $$
 
-which is symmetric in the two species and is largest when their strengths are equal. It does not crown a winner. (The Davidson tie model is the other standard extension; half-wins keep the same Hessian shape as a decisive game, which makes the Laplace step simple.) A skip is not a comparison.
+which is symmetric in the two species and is largest when their strengths are equal. It does not crown a winner. (The Davidson tie model is the other standard extension; half-wins keep the same Hessian shape as a decisive game, which makes the Laplace step simple.) A skip is not a comparison: it only draws a new pair. Nothing is recorded, so it never appears in History, Export, or counts, and Undo always takes back the last real vote. Skips saved by older versions are dropped when history loads or is imported.
 
 ### Traits and partial pooling
 
@@ -148,7 +148,7 @@ The checks use Node's built-in test runner. Node is only for that, and for rebui
 node --test
 ```
 
-The suite covers the fit (including a numerical gradient check at the mode), half-win ties, skips, multi-level undo, trait-weight learning, partial pooling, the Laplace prior variance, and pair selection. One simulation hides a true strength vector, answers with noisy Bradley–Terry preferences, and checks that tail-weighted pairing places the true favorites and least favorites closer to the ends than random pairing after the same number of duels. Whole-list Kendall tau is not that score: the weight spends comparisons on the ends, and on this 24-species run random pairing still agrees on more of the middle. Another checks that choosing the next pair among all 1,025 species stays under 100ms.
+The suite covers the fit (including a numerical gradient check at the mode), half-win ties, unrecorded skips, multi-level undo, trait-weight learning, partial pooling, the Laplace prior variance, and pair selection. One simulation hides a true strength vector, answers with noisy Bradley–Terry preferences, and checks that tail-weighted pairing places the true favorites and least favorites closer to the ends than random pairing after the same number of duels. Whole-list Kendall tau is not that score: the weight spends comparisons on the ends, and on this 24-species run random pairing still agrees on more of the middle. Another checks that choosing the next pair among all 1,025 species stays under 100ms.
 
 ## Project layout
 

@@ -1757,3 +1757,52 @@ body.view-duel .seal { width: 52px; height: 52px; }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; }
 }
+
+/* Long form names (Paldean Tauros breeds, Alcremie sweets, Gigantamax Urshifu...) wrap instead of clipping. */
+.card h2,
+.form-names li,
+.who strong,
+.species-forms,
+.bout,
+.chosen { overflow-wrap: anywhere; }
+.card .types { flex-wrap: wrap; }
+body.view-duel .form-names {
+  max-height: none;
+  overflow: visible;
+  gap: 4px;
+}
+body.view-duel .form-names li {
+  font-size: clamp(0.62rem, 0.55rem + 0.25vw, 0.78rem);
+  padding: 1px 6px;
+}
+body.view-duel h2 { font-size: clamp(1rem, 0.85rem + 0.6vw, 1.25rem); line-height: 1.15; }
+/* Phones: the two cards share the full width and Tie, Skip, Undo sit in a row underneath. */
+@media (max-width: 640px) {
+  body.view-duel .stage {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas: "a b" "v v";
+    gap: 6px;
+  }
+  body.view-duel #card-a { grid-area: a; }
+  body.view-duel #card-b { grid-area: b; }
+  body.view-duel .versus {
+    grid-area: v;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  body.view-duel .versus .seal { width: 36px; height: 36px; font-size: 0.8rem; }
+  body.view-duel .versus .swipe-hint { display: none; }
+  body.view-duel .ghost,
+  body.view-duel .texty { width: auto; }
+  /* Very short screens: the card scrolls rather than hiding names under its edge. */
+  body.view-duel .card { padding: 6px; overflow-y: auto; overscroll-behavior: contain; }
+  /* Handheld (Hoenn) and Rotom Dex (Alola) frames: give the screen the width on phones. */
+  html[data-dex="3"] .device { padding-left: 22px; padding-right: 22px; }
+  html[data-dex="3"] .device::before,
+  html[data-dex="3"] .device::after { display: none; }
+  html[data-dex="7"] .device { width: calc(100% - 20px); }
+  html[data-dex="7"] .device::before,
+  html[data-dex="7"] .device::after { display: none; }
+}

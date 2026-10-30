@@ -141,7 +141,7 @@
           EV(x) is a two-layer network: those same columns are the inputs, each hidden unit has a bias and a weight on every input to it, and a readout turns the last layer into one number. The offset b belongs to that species alone.
         </p>
         <p>
-          A tie counts as a half-win each way and enters the fit. A skip stays in the history so it can be undone, and it stays out of the fit.
+          A tie counts as a half-win each way and enters the fit. A skip just shows a new pair. It is not recorded and never enters the fit.
           Weights and offsets are the mode of a normal prior plus that likelihood, found by alternating Newton steps.
           The ± beside a weight is its Laplace posterior standard deviation. It starts at the prior width and shrinks as matchups speak to that column.
         </p>
