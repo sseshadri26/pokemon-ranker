@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PokeRanker</title>
+  <title>PokéRanker</title>
   <link rel="icon" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
   <script>
@@ -48,7 +48,7 @@
     <header>
       <div class="brand">
         <p class="eyebrow">National Dex, by affection</p>
-        <h1>PokeRanker</h1>
+        <h1>PokéRanker</h1>
       </div>
       <div class="progress">
         <p data-testid="matchup-count" id="matchup-count">0 matchups</p>
@@ -57,11 +57,12 @@
         </div>
         <p class="bound" id="bound"></p>
       </div>
-      <nav>
-        <button type="button" id="view-duel" class="on">Duel</button>
-        <button type="button" id="view-choose">Choose</button>
-        <button type="button" id="view-history">History</button>
-        <button type="button" id="view-board">Rankings</button>
+      <nav aria-label="Views">
+        <button type="button" id="view-duel" class="on" aria-current="page">Duel</button>
+        <button type="button" id="view-choose" aria-label="Choose"><span class="tab-long">Choose</span><span class="tab-short" aria-hidden="true">Pick</span></button>
+        <button type="button" id="view-history" aria-label="History"><span class="tab-long">History</span><span class="tab-short" aria-hidden="true">Log</span></button>
+        <button type="button" id="view-board" aria-label="Rankings"><span class="tab-long">Rankings</span><span class="tab-short" aria-hidden="true">Rank</span></button>
+        <button type="button" id="view-grids" aria-label="Grids"><span class="tab-long">Grids</span><span class="tab-short" aria-hidden="true">Grid</span></button>
         <button type="button" id="view-model">Model</button>
         <button type="button" id="data-menu" aria-expanded="false" aria-controls="data-panel" aria-haspopup="dialog">Data</button>
       </nav>
@@ -129,6 +130,17 @@
       </div>
       <ol class="ledger" id="ledger"></ol>
       <p class="empty" id="filter-empty" hidden>Nothing in the dex matches that filter.</p>
+    </section>
+    <section class="sheet grids" id="grids" hidden>
+      <div class="grids-head">
+        <div>
+          <p class="eyebrow">Favorites by trait</p>
+          <h2>Grids</h2>
+        </div>
+        <button type="button" class="ghost" id="grid-add">New grid</button>
+      </div>
+      <p class="grids-note">Pick a trait for each row and column. Each cell shows your highest-ranked Pokémon with both traits, in the order Rankings is using. “All” leaves that side unfiltered.</p>
+      <div id="grid-list"></div>
     </section>
     <section class="sheet" id="model" hidden>
       <div class="sheet-lead">
@@ -253,6 +265,8 @@
   <script src="data/ink.js"></script>
   <script src="js/model.js"></script>
   <script src="js/ranker.js"></script>
+  <script src="js/grids.js"></script>
+  <script src="js/tabs.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

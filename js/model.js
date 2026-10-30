@@ -930,6 +930,9 @@ function fitBradleyTerry(design, comparisons, config = {}) {
         offset: b,
         offsetVar: laplace.offsetVar,
         traitCoords: laplace.traitCoords,
+        traitVar: laplace.traitVar,
+        ownVar: laplace.ownVar,
+        traitOwnCov: laplace.traitOwnCov,
         comparisons: encoded.a.length,
         iterations,
         converged,
@@ -1022,6 +1025,11 @@ function laplaceUncertainty(X, rows, cols, s, encoded, precW, precB) {
     const weightSd = new Float64Array(cols);
     const offsetVar = new Float64Array(rows);
     const traitCoords = new Array(rows);
+    // Display-only split of Var(s_i): trait part xᵀΣ_w x, own adjustment Var(b_i), and their
+    // covariance. The selector never reads these.
+    const traitVar = new Float64Array(rows);
+    const ownVar = new Float64Array(rows);
+    const traitOwnCov = new Float64Array(rows);
     const y = new Float64Array(cols);
     const gScaled = new Float64Array(cols);
     if (factor) {
@@ -1041,18 +1049,34 @@ function laplaceUncertainty(X, rows, cols, s, encoded, precW, precB) {
             solveLower(factor.chol, cols, gScaled, y);
             // Var(s_i) = 1/h_i + ‖L⁻¹ x_i − L⁻¹ (G_i / h_i)‖²
             let quad = 0;
+            let zz = 0;
+            let gg = 0;
+            let zg = 0;
             for (let k = 0; k < cols; k++) {
+                zz += coords[k] * coords[k];
+                gg += y[k] * y[k];
+                zg += coords[k] * y[k];
                 const diff = coords[k] - y[k];
                 quad += diff * diff;
+                // Keep the corrected coordinate. s_i moves with the weights as (x_i − G_i/h_i)·δw,
+                // because b_i shifts to absorb part of any weight change. The raw L⁻¹x_i overstated
+                // that for species with many matchups whose offset fights the trait prediction
+                // (Cursola), so the pair selector kept seeing them as the most uncertain.
+                coords[k] = diff;
             }
             sd[i] = Math.sqrt(Math.max(offsetVar[i] + quad, 1e-10));
+            // b_i = b̂_i − (G_i/h_i)·δw + ε, so Var(b_i) = 1/h_i + ‖g‖² and Cov(x·δw, b_i) = −z·g.
+            traitVar[i] = zz;
+            ownVar[i] = offsetVar[i] + gg;
+            traitOwnCov[i] = -zg;
         }
         else {
             sd[i] = Math.sqrt(offsetVar[i]);
+            ownVar[i] = offsetVar[i];
         }
         traitCoords[i] = coords;
     }
-    return { sd, weightSd, offsetVar, traitCoords };
+    return { sd, weightSd, offsetVar, traitCoords, traitVar, ownVar, traitOwnCov };
 }
 /** Exposed for the gradient check in tests. */
 function posteriorNll(design, comparisons, w, b, sigmaW = DEFAULTS.sigmaW, sigmaB = DEFAULTS.sigmaB) {
@@ -1193,6 +1217,22 @@ function rankingSummary(fit, design) {
 /* src/model/select.ts */
 
 const DEFAULT_RNG = Math.random;
+/**
+ * Display-only uncertainty split for species i. corrected² = trait² + own² + 2·cov;
+ * naive = √(trait² + own²) treats the two parts as independent (the old, uncorrected figure).
+ */
+function uncertaintyBreakdown(fit, i) {
+    const trait = fit.traitVar ? fit.traitVar[i] : 0;
+    const own = fit.ownVar ? fit.ownVar[i] : fit.offsetVar[i];
+    const cov = fit.traitOwnCov ? fit.traitOwnCov[i] : 0;
+    return {
+        corrected: fit.sd[i],
+        trait: Math.sqrt(Math.max(trait, 0)),
+        own: Math.sqrt(Math.max(own, 0)),
+        cov,
+        naive: Math.sqrt(Math.max(trait + own, 0)),
+    };
+}
 function differenceVariance(model, i, j) {
     let v = model.offsetVar[i] + model.offsetVar[j];
     const left = model.traitCoords?.[i];
@@ -1231,6 +1271,151 @@ function tailsInOrder(order) {
     }
     return tails;
 }
+/**
+ * Average marginal effect of each column on x·w + EV(x) (the offset b is left out), across species.
+ * - binary columns: f(x with the column at 1) − f(x with it at 0), the rest of the row unchanged;
+ *   in an exclusive one-hot block (one column on per species) "0" means the whole block off, so the
+ *   row never has two columns of the block on.
+ * - games (fractional shares): same toggle, one full unit of that game column (as for a species found
+ *   only in that game), the species' other game shares left as they are.
+ * - continuous columns: the derivative times one standard deviation of the column ("per 1 SD").
+ * Returns per column { kind, linear, mean, sd, p10, p90 }; linear is w (or w·SD for continuous).
+ * With no network the total equals the linear part exactly.
+ */
+function totalEffects(X, rows, cols, names, weights, network) {
+    const H1 = network ? network.hidden[0] : 0;
+    const H2 = network ? network.hidden[1] : 0;
+    const W1 = network ? network.W1 : null;
+    const c1 = network ? network.c1 : null;
+    const W2 = network ? network.W2 : null;
+    const c2 = network ? network.c2 : null;
+    const v = network ? network.v : null;
+    const prefixOf = (name) => { const cut = name.indexOf(":"); return cut < 0 ? name : name.slice(0, cut); };
+    // Column kinds and exclusive blocks.
+    const kind = new Array(cols);
+    const colSd = new Float64Array(cols);
+    for (let k = 0; k < cols; k++) {
+        let binary = true;
+        let mean = 0;
+        for (let i = 0; i < rows; i++) {
+            const x = X[i * cols + k];
+            if (x !== 0 && x !== 1) binary = false;
+            mean += x / rows;
+        }
+        let ss = 0;
+        for (let i = 0; i < rows; i++) ss += (X[i * cols + k] - mean) ** 2;
+        colSd[k] = Math.sqrt(ss / Math.max(1, rows));
+        kind[k] = binary ? "binary" : prefixOf(names[k]) === "game" ? "share" : "continuous";
+    }
+    const blockOf = new Int32Array(cols).fill(-1);
+    const blocks = new Map();
+    names.forEach((name, k) => {
+        if (kind[k] !== "binary" || name.indexOf(":") < 0) return;
+        const pre = prefixOf(name);
+        if (!blocks.has(pre)) blocks.set(pre, []);
+        blocks.get(pre).push(k);
+    });
+    for (const [, members] of blocks) {
+        if (members.length < 2) continue;
+        let exclusive = true;
+        for (let i = 0; i < rows && exclusive; i++) {
+            let on = 0;
+            for (const k of members) on += X[i * cols + k];
+            if (on > 1) exclusive = false;
+        }
+        if (exclusive) for (const k of members) { blockOf[k] = members[0]; kind[k] = "one-hot"; }
+    }
+    const effects = Array.from({ length: cols }, () => new Float64Array(rows));
+    if (network && H1 > 0) {
+        const pre = new Float64Array(H1);
+        const ev = (p) => {
+            let total = 0;
+            for (let b = 0; b < H2; b++) {
+                let z = c2[b];
+                for (let a = 0; a < H1; a++) z += W2[b * H1 + a] * Math.tanh(p[a]);
+                total += v[b] * Math.tanh(z);
+            }
+            return total;
+        };
+        const shifted = (base, k, delta, out) => {
+            for (let a = 0; a < H1; a++) out[a] = base[a] + W1[a * cols + k] * delta;
+            return out;
+        };
+        const off = new Float64Array(H1);
+        const on = new Float64Array(H1);
+        for (let i = 0; i < rows; i++) {
+            const r = i * cols;
+            for (let a = 0; a < H1; a++) {
+                let z = c1[a];
+                for (let j = 0; j < cols; j++) z += W1[a * cols + j] * X[r + j];
+                pre[a] = z;
+            }
+            for (let k = 0; k < cols; k++) {
+                const x = X[r + k];
+                let d;
+                if (kind[k] === "continuous") {
+                    const h = 1e-3;
+                    d = (ev(shifted(pre, k, h, on)) - ev(shifted(pre, k, -h, off))) / (2 * h) * colSd[k];
+                } else if (kind[k] === "one-hot") {
+                    // Block off: remove whichever member this species has on.
+                    off.set(pre);
+                    const head = blockOf[k];
+                    for (let j = head; j < cols && blockOf[j] === head; j++) {
+                        if (X[r + j] !== 0) for (let a = 0; a < H1; a++) off[a] -= W1[a * cols + j] * X[r + j];
+                    }
+                    for (let a = 0; a < H1; a++) on[a] = off[a] + W1[a * cols + k];
+                    d = ev(on) - ev(off);
+                } else {
+                    shifted(pre, k, 1 - x, on);
+                    shifted(pre, k, -x, off);
+                    d = ev(on) - ev(off);
+                }
+                effects[k][i] = d;
+            }
+        }
+    }
+    return names.map((name, k) => {
+        const linear = kind[k] === "continuous" ? weights[k] * colSd[k] : weights[k];
+        const values = Float64Array.from(effects[k], (d) => d + linear).sort();
+        let mean = 0;
+        for (const x of values) mean += x / rows;
+        let ss = 0;
+        for (const x of values) ss += (x - mean) ** 2;
+        const q = (f) => values[Math.min(rows - 1, Math.max(0, Math.round(f * (rows - 1))))];
+        return { name, kind: kind[k], linear, mean, sd: Math.sqrt(ss / Math.max(1, rows)), p10: q(0.1), p90: q(0.9), colSd: colSd[k] };
+    });
+}
+/** Standard normal CDF (Abramowitz–Stegun 7.1.26 via erf). */
+function normalCdf(x) {
+    const t = 1 / (1 + 0.3275911 * Math.abs(x) / Math.SQRT2);
+    const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-(x * x) / 2);
+    return x >= 0 ? 0.5 * (1 + y) : 0.5 * (1 - y);
+}
+/**
+ * P(species is in the top K): its strength against the cut halfway between ranks K and K+1,
+ * scaled by its own uncertainty. Near 1 for settled favourites, about 0.5 on the boundary.
+ */
+function topProbabilities(model, order, topN) {
+    const n = order.length;
+    const p = new Float64Array(n);
+    if (topN <= 0 || topN >= n)
+        return p.fill(topN >= n ? 1 : 0);
+    const cut = (model.strength[order[n - topN]] + model.strength[order[n - topN - 1]]) / 2;
+    for (let i = 0; i < n; i++) {
+        const sd = Math.sqrt(Math.max(model.offsetVar[i] ?? 0, 0) + 0.01);
+        p[i] = normalCdf((model.strength[i] - cut) / sd);
+    }
+    return p;
+}
+/**
+ * Extra weight for pairs that decide the top of the list: 1 + boost·√(p_i·p_j) (boost 1 by default;
+ * scripts/bench-top25.cjs found 3 and 6 traded too much overall accuracy for top-25 recall).
+ * Two likely top-K species (ordering inside the top) get the most; a boundary pair
+ * (p ≈ 0.5 each) about half; pairs with no top-K chance stay at 1.
+ */
+function topFocusMultiplier(pA, pB, boost) {
+    return 1 + boost * Math.sqrt(pA * pB);
+}
 function selectNextPair(model, options = {}) {
     const n = model.ids.length;
     if (n < 2)
@@ -1240,21 +1425,36 @@ function selectNextPair(model, options = {}) {
     const window = options.window ?? 28;
     const topK = options.topK ?? 8;
     const avoid = options.avoid;
+    // Species ids from the most recent pairs, newest last. Repeats are penalised and a species
+    // already in `maxRecent` of them is left out while any other pair is available.
+    const recentCounts = new Map();
+    for (const id of options.recent ?? [])
+        recentCounts.set(id, (recentCounts.get(id) ?? 0) + 1);
+    const maxRecent = options.maxRecent ?? 2;
+    const blocked = (k) => (recentCounts.get(model.ids[k]) ?? 0) >= maxRecent;
+    const repeatPenalty = (k) => Math.pow(0.2, recentCounts.get(model.ids[k]) ?? 0);
     const exploreDraw = rng() < explore;
     // Unweighted on purpose: a least-shown species is still drawn from the middle.
     if (exploreDraw) {
-        const picked = explorePair(model, options.games, rng, avoid);
+        const picked = explorePair(model, options.games, rng, avoid, blocked);
         if (picked)
             return picked;
     }
     const order = orderByStrength(model.strength, n);
     const tails = tailsInOrder(order);
+    // Top-of-list focus (topN = 0 turns it off and gives the older selector).
+    const topN = Math.min(options.topN ?? 25, n);
+    const topBoost = options.topBoost ?? 1;
+    const pTop = topProbabilities(model, order, topBoost > 0 ? topN : 0);
     const candidates = collectCandidates(model, order, window, rng);
+    if (topBoost > 0 && topN > 0 && options.topPairs !== false)
+        addTopPairs(candidates, order, Math.min(n, Math.round(topN * 1.6)));
     let best = [];
     for (const [i, j] of candidates) {
         const mu = model.strength[i] - model.strength[j];
         const gain = expectedInformationGain(mu, differenceVariance(model, i, j));
-        const score = gain * pairTailMultiplier(tails[i], tails[j]);
+        const focus = topBoost > 0 ? topFocusMultiplier(pTop[i], pTop[j], topBoost) : 1;
+        const score = gain * pairTailMultiplier(tails[i], tails[j]) * focus * repeatPenalty(i) * repeatPenalty(j);
         best.push({ i, j, gain, score });
     }
     if (best.length === 0)
@@ -1265,6 +1465,11 @@ function selectNextPair(model, options = {}) {
         if (filtered.length > 0)
             best = filtered;
     }
+    if (recentCounts.size > 0) {
+        const fresh = best.filter((p) => !blocked(p.i) && !blocked(p.j));
+        if (fresh.length > 0)
+            best = fresh;
+    }
     const pool = best.slice(0, Math.max(1, topK));
     const choice = pool[Math.floor(rng() * pool.length)];
     return {
@@ -1272,6 +1477,22 @@ function selectNextPair(model, options = {}) {
         b: model.ids[choice.j],
         infoGain: choice.gain,
     };
+}
+/** Every pair among the current top `m` (ranks 1..m), so the head of the list is always a candidate. */
+function addTopPairs(pairs, order, m) {
+    const n = order.length;
+    const seen = new Set(pairs.map(([i, j]) => i * n + j));
+    const head = order.slice(n - m);
+    for (let u = 0; u < head.length; u++) {
+        for (let v = u + 1; v < head.length; v++) {
+            const lo = Math.min(head[u], head[v]);
+            const hi = Math.max(head[u], head[v]);
+            if (!seen.has(lo * n + hi)) {
+                seen.add(lo * n + hi);
+                pairs.push([lo, hi]);
+            }
+        }
+    }
 }
 function samePair(a, b, avoid) {
     return (a === avoid[0] && b === avoid[1]) || (a === avoid[1] && b === avoid[0]);
@@ -1337,7 +1558,7 @@ function collectCandidates(model, order, window, rng) {
     }
     return pairs;
 }
-function explorePair(model, games, rng, avoid) {
+function explorePair(model, games, rng, avoid, blocked) {
     const n = model.ids.length;
     const counts = games ?? new Float64Array(n);
     let min = Infinity;
@@ -1358,6 +1579,8 @@ function explorePair(model, games, rng, avoid) {
         if (j === i)
             continue;
         if (avoid && samePair(model.ids[i], model.ids[j], avoid))
+            continue;
+        if (blocked && blocked(j))
             continue;
         options.push(j);
     }
@@ -1510,7 +1733,11 @@ function strengthBreakdown(row, weights, network, offset, names) {
     rankingSummary: rankingSummary,
     differenceVariance: differenceVariance,
     tailWeight: tailWeight,
+    totalEffects: totalEffects,
+    topProbabilities: topProbabilities,
+    topFocusMultiplier: topFocusMultiplier,
     pairTailMultiplier: pairTailMultiplier,
     selectNextPair: selectNextPair,
+    uncertaintyBreakdown: uncertaintyBreakdown,
   };
 });

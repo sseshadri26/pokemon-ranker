@@ -540,7 +540,7 @@ kbd {
 .facts code { font-family: var(--sans); font-weight: 700; }
 .traits {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
   gap: 14px;
 }
 .trait {
@@ -642,6 +642,13 @@ kbd {
 .trait-num.down { color: var(--coral); }
 .trait-num.flat { color: var(--card-muted); }
 .trait-sd { color: var(--card-muted); font-size: 0.85rem; }
+.trait li:has(.trait-total) { grid-template-columns: minmax(88px, 0.8fr) minmax(72px, 1.2fr) 4.4em 4em 5.6em; }
+.trait-total { font-variant-numeric: tabular-nums; text-align: right; font-weight: 700; line-height: 1.1; }
+.trait-total small { display: block; font-weight: 400; font-size: 0.7rem; color: var(--card-muted); white-space: nowrap; }
+.trait-cols { font-size: 0.78rem !important; }
+@media (max-width: 640px) {
+  .trait li:has(.trait-total) { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+}
 
 .modal {
   position: fixed;
@@ -1805,4 +1812,891 @@ body.view-duel h2 { font-size: clamp(1rem, 0.85rem + 0.6vw, 1.25rem); line-heigh
   html[data-dex="7"] .device { width: calc(100% - 20px); }
   html[data-dex="7"] .device::before,
   html[data-dex="7"] .device::after { display: none; }
+}
+.facts .unc-split dd { overflow-wrap: anywhere; }
+.facts .unc-split small { display: block; margin-top: 2px; font-weight: 400; font-size: 0.75rem; color: var(--card-muted); }
+
+/* Grids: trait rows × trait columns, best-ranked match in each cell. */
+.grids-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+.grids-head .ghost { width: auto; }
+.grids-note { color: var(--muted); max-width: 68ch; margin: 8px 0 16px; }
+.grid-card {
+  background: var(--card);
+  color: var(--card-ink);
+  border-radius: 20px;
+  padding: 12px;
+  margin: 0 0 18px;
+}
+.grid-title { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.grid-title-input {
+  flex: 1 1 180px;
+  min-width: 0;
+  font: inherit;
+  font-weight: 700;
+  font-size: 1.1rem;
+  background: var(--field);
+  color: var(--field-ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+.grid-card button {
+  border: 1px solid color-mix(in srgb, var(--card-ink) 22%, transparent);
+  background: transparent;
+  color: var(--card-ink);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 0.85rem;
+}
+.grid-card button.danger { border-color: var(--coral); color: var(--card-ink); background: color-mix(in srgb, var(--coral) 16%, transparent); }
+.grid-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+.trait-grid { border-collapse: separate; border-spacing: 2px; }
+.trait-grid th { font-weight: 400; vertical-align: middle; padding: 0; }
+.grid-corner { text-align: left; }
+.grid-corner button { display: block; margin: 0 0 3px; white-space: nowrap; }
+.grid-card .grid-corner button { padding: 2px 8px; font-size: 0.75rem; }
+.grid-axis { position: relative; display: flex; align-items: center; gap: 2px; }
+/* The trait name is plain wrapping text; the real select is laid invisibly over it. */
+.axis-label {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--field);
+  color: var(--field-ink);
+  font-size: 0.72rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  text-align: center;
+  cursor: pointer;
+}
+.grid-axis select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 16px;
+}
+.grid-axis:focus-within .axis-label { outline: 2px solid var(--coral); outline-offset: 1px; }
+thead .grid-axis { width: 60px; flex-direction: column; align-items: stretch; }
+tbody .grid-axis { width: 78px; }
+thead .grid-axis select, tbody .grid-axis select { right: auto; }
+.grid-card .grid-x { position: relative; z-index: 1; padding: 0 5px; line-height: 1.3; font-size: 0.75rem; align-self: center; }
+.grid-cell {
+  width: 60px;
+  min-width: 60px;
+  height: 66px;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card-ink) 6%, var(--card));
+}
+.grid-cell.none { color: var(--card-muted); font-size: 1.1rem; }
+.grid-card .grid-pick {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 1px 1px 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+  background: transparent;
+  overflow: hidden;
+}
+.grid-pick:hover, .grid-pick:focus-visible { outline: 2px solid var(--coral); outline-offset: -2px; }
+.grid-art { width: 100%; height: 100%; min-height: 0; }
+.grid-art img, .grid-art .monogram { width: 100%; height: 100%; object-fit: contain; display: block; }
+.grid-name {
+  max-width: 100%;
+  font-size: 0.6rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 2px;
+}
+.grid-rank {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 6px;
+  background: rgba(20, 20, 24, 0.78);
+  color: #fff;
+  font-size: 0.56rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+@media (max-width: 640px) {
+  .grid-card { padding: 8px; border-radius: 14px; }
+  .trait-grid { border-spacing: 1px; }
+  .grid-cell { width: 52px; min-width: 52px; height: 56px; border-radius: 6px; }
+  .grid-name { font-size: 0.5rem; }
+  .grid-rank { font-size: 0.5rem; }
+  thead .grid-axis { width: 52px; }
+  tbody .grid-axis { width: 58px; flex-direction: column; align-items: stretch; }
+  .axis-label { font-size: 0.62rem; padding: 2px 3px; }
+}
+.trait-grid tbody th, .trait-grid .grid-corner { position: sticky; left: 0; z-index: 2; background: var(--card); }
+
+/* Grid-wide rules: a compact chip row under the title. */
+.grid-rules { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0 0 8px; font-size: 0.78rem; }
+.grid-rules-label { font-weight: 700; color: var(--card-muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.68rem; }
+.rule-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--card-ink) 25%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, #2e9d5b 14%, var(--card));
+  overflow: hidden;
+}
+.rule-chip.ex { background: color-mix(in srgb, var(--coral) 16%, var(--card)); }
+.rule-chip.ex .rule-name { text-decoration: line-through; text-decoration-thickness: 1px; }
+.grid-card .rule-chip button { border: 0; border-radius: 0; background: transparent; padding: 2px 7px; font-size: 0.72rem; }
+.grid-card .rule-chip .rule-mode { font-weight: 700; border-right: 1px solid color-mix(in srgb, var(--card-ink) 20%, transparent); }
+.rule-name { padding: 0 2px 0 6px; white-space: nowrap; }
+.rule-select {
+  font: inherit;
+  font-size: 0.75rem;
+  max-width: 150px;
+  background: var(--field);
+  color: var(--field-ink);
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  padding: 2px 6px;
+}
+.rule-unique { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.grid-rules-sum { flex-basis: 100%; color: var(--card-muted); font-size: 0.72rem; }
+
+/* Form picker popover for a grid cell. */
+.form-pop {
+  position: fixed;
+  z-index: 60;
+  width: max-content;
+  max-width: min(340px, calc(100vw - 16px));
+  max-height: min(70vh, 420px);
+  overflow: auto;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--card-ink);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+}
+.form-pop[hidden] { display: none; }
+.form-pop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 0.9rem; }
+.form-pop button { font: inherit; color: inherit; cursor: pointer; }
+.form-pop-x { border: 0; background: transparent; font-size: 1.1rem; line-height: 1; padding: 2px 6px; }
+.form-pop-list { display: grid; grid-template-columns: repeat(auto-fill, 76px); gap: 4px; max-width: 320px; }
+.form-pop-item {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--card-ink) 6%, var(--card));
+}
+.form-pop-item.on { border-color: var(--coral); background: color-mix(in srgb, var(--coral) 18%, var(--card)); }
+.form-pop-item:hover, .form-pop-item:focus-visible { outline: 2px solid var(--coral); outline-offset: -1px; }
+.form-pop-art { width: 60px; height: 60px; }
+.form-pop-art img, .form-pop-art .monogram { width: 100%; height: 100%; object-fit: contain; display: block; }
+.form-pop-name { font-size: 0.66rem; line-height: 1.15; text-align: center; overflow-wrap: anywhere; max-width: 70px; }
+.form-pop-foot { margin-top: 8px; display: flex; justify-content: flex-end; }
+.form-pop-foot button { border: 1px solid var(--line); background: var(--field); color: var(--field-ink); border-radius: 999px; padding: 4px 12px; font-size: 0.82rem; }
+
+/* ---- Top-level tabs: always one row; each generation look draws them its own way. ---- */
+@media (min-width: 901px) { header { grid-template-columns: auto minmax(0, 1fr); } }
+header nav {
+  grid-column: 1 / -1;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  padding: 3px;
+}
+header nav::-webkit-scrollbar { display: none; }
+nav button { flex: 0 0 auto; white-space: nowrap; line-height: 1.2; }
+nav button:focus-visible { outline: 2px solid var(--coral); outline-offset: -2px; }
+.tab-short { display: none; }
+@media (max-width: 720px) {
+  .tab-long { display: none; }
+  .tab-short { display: inline; }
+  header nav { gap: 2px; }
+  nav button { padding: 6px 8px; font-size: 0.82rem; }
+}
+@media (max-width: 720px) {
+  header nav { gap: 1px; padding: 2px; }
+  nav button { padding: 4px 4px; font-size: 0.7rem; letter-spacing: 0 !important; text-transform: none !important; }
+  html[data-dex="1"] nav button { padding-left: 4px; }
+  html[data-dex="1"] nav button.on { padding-left: 11px; }
+  html[data-dex="3"] header nav { border-width: 2px; padding: 2px; }
+  html[data-dex="6"] nav button { padding: 4px 8px; clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 50%, calc(100% - 5px) 100%, 5px 100%, 0 50%); }
+  html[data-dex="9"] nav button { padding: 4px 4px 3px; }
+  html[data-dex="9"] nav button.on { padding-top: 6px; }
+}
+
+/* I · Kanto: monochrome LCD menu with a ▶ cursor. */
+html[data-dex="1"] nav button {
+  position: relative;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #1d3a0e;
+  padding-left: 16px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+html[data-dex="1"] nav button.on,
+html[data-dex="1"] nav button.open { background: transparent; color: #0b1a04; text-decoration: underline 2px; text-underline-offset: 3px; }
+html[data-dex="1"] nav button.on::before { content: "▶"; position: absolute; left: 3px; font-size: 0.7em; top: 50%; transform: translateY(-50%); }
+html[data-dex="1"] nav button:hover { background: rgba(15, 36, 5, 0.12); }
+html[data-dex="1"] nav button:focus-visible { outline: 2px dashed #0b1a04; }
+@media (max-width: 720px) { html[data-dex="1"] nav button { padding-left: 12px; letter-spacing: 0; } }
+
+/* II · Johto: brass keys on the flip pad; the active key is pressed in. */
+html[data-dex="2"] nav button {
+  border: 1px solid #6e5a2e;
+  border-radius: 7px;
+  background: linear-gradient(#ead096, #b38c45);
+  color: #2a2418;
+  box-shadow: 0 2px 0 #6e5a2e;
+  font-weight: 700;
+}
+html[data-dex="2"] nav button:hover { background: linear-gradient(#f3dca8, #c09a52); }
+html[data-dex="2"] nav button.on,
+html[data-dex="2"] nav button.open {
+  background: linear-gradient(#2c6b62, #23564f);
+  color: #f4fff8;
+  border-color: #1c3f3a;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.45);
+  transform: translateY(2px);
+}
+
+/* III · Hoenn: handheld start-menu box, red highlight bar. */
+html[data-dex="3"] header nav {
+  background: #fff;
+  border: 3px solid #102033;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 2px #7fb4ea;
+  padding: 4px;
+}
+html[data-dex="3"] nav button {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #102033;
+  font-weight: 700;
+  padding: 5px 10px;
+}
+html[data-dex="3"] nav button:hover { background: #d7ebfb; }
+html[data-dex="3"] nav button.on,
+html[data-dex="3"] nav button.open { background: #e11d2e; color: #fff; }
+
+/* IV · Sinnoh: segmented control on the touch screen. */
+html[data-dex="4"] header nav {
+  background: #d5dbe3;
+  border-radius: 12px;
+  padding: 3px;
+  gap: 2px;
+}
+html[data-dex="4"] nav button {
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #3a4656;
+}
+html[data-dex="4"] nav button:hover { background: rgba(255, 255, 255, 0.55); }
+html[data-dex="4"] nav button.on,
+html[data-dex="4"] nav button.open {
+  background: #fff;
+  color: #1c2430;
+  border: 0;
+  box-shadow: 0 1px 3px rgba(28, 36, 48, 0.25);
+  font-weight: 700;
+}
+
+/* V · Unova: glowing underline tabs on the dark slab. */
+html[data-dex="5"] header nav { border-bottom: 1px solid rgba(76, 141, 255, 0.25); padding-bottom: 0; }
+html[data-dex="5"] nav button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #8aa0c0;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+}
+html[data-dex="5"] nav button:hover { color: #e8f1ff; }
+html[data-dex="5"] nav button.on,
+html[data-dex="5"] nav button.open {
+  background: transparent;
+  color: #e8f1ff;
+  border-bottom-color: #4c8dff;
+  text-shadow: 0 0 8px rgba(76, 141, 255, 0.9);
+  box-shadow: 0 8px 10px -8px #4c8dff;
+}
+@media (max-width: 720px) { html[data-dex="5"] nav button { letter-spacing: 0; font-size: 0.74rem; } }
+
+/* VI · Kalos: hexagonal chips, like the frame. Focus fills the chip because the clip hides outlines. */
+html[data-dex="6"] nav button {
+  border: 0;
+  border-radius: 0;
+  background: #cfe9f7;
+  color: #243044;
+  padding: 6px 16px;
+  clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 9px 100%, 0 50%);
+}
+html[data-dex="6"] nav button:hover { background: #b4dcf1; }
+html[data-dex="6"] nav button.on,
+html[data-dex="6"] nav button.open { background: #5b8def; color: #fff; }
+html[data-dex="6"] nav button:focus-visible { outline: 0; background: #243044; color: #fff; }
+@media (max-width: 720px) { html[data-dex="6"] nav button { padding: 5px 11px; } }
+
+/* VII · Alola: Rotom Dex app bar. */
+html[data-dex="7"] header nav {
+  background: #e4263a;
+  border-radius: 14px;
+  padding: 4px;
+  gap: 2px;
+}
+html[data-dex="7"] nav button {
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #fff6f6;
+  font-weight: 700;
+}
+html[data-dex="7"] nav button:hover { background: rgba(255, 255, 255, 0.18); }
+html[data-dex="7"] nav button.on,
+html[data-dex="7"] nav button.open { background: #fff; color: #c41528; }
+html[data-dex="7"] nav button:focus-visible { outline-color: #fff; outline-offset: 1px; }
+
+/* VIII · Galar: phone navigation bar with a dot under the open app. */
+html[data-dex="8"] header nav {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+}
+html[data-dex="8"] nav button {
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: #5c534e;
+  font-weight: 600;
+}
+html[data-dex="8"] nav button:hover { color: #1a1a1a; background: #f6f3f1; }
+html[data-dex="8"] nav button.on,
+html[data-dex="8"] nav button.open { background: #1a1a1a; color: #fff; }
+html[data-dex="8"] nav button.on::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: #f15c42;
+}
+
+/* IX · Paldea: manila folder tabs standing on the page edge; the open one joins the page. */
+html[data-dex="9"] header nav {
+  align-items: flex-end;
+  gap: 3px;
+  padding: 4px 6px 0;
+  background: linear-gradient(to top, rgba(125, 90, 70, 0.4) 1px, transparent 1px);
+}
+html[data-dex="9"] nav button {
+  border: 1px solid rgba(125, 90, 70, 0.4);
+  border-radius: 10px 10px 0 0;
+  background: #ecdcb8;
+  color: #3b2c1f;
+  padding: 6px 14px 5px;
+  box-shadow: inset 0 -6px 8px -8px rgba(80, 50, 20, 0.5);
+}
+html[data-dex="9"] nav button:nth-child(2) { background: #e7d6f3; }
+html[data-dex="9"] nav button:nth-child(3) { background: #d8ecd9; }
+html[data-dex="9"] nav button:nth-child(4) { background: #f6d6cf; }
+html[data-dex="9"] nav button:nth-child(5) { background: #d6e4f4; }
+html[data-dex="9"] nav button:nth-child(6) { background: #f3e9bf; }
+html[data-dex="9"] nav button:hover { padding-top: 8px; }
+html[data-dex="9"] nav button.on,
+html[data-dex="9"] nav button.open {
+  background: #fffaf3;
+  color: #241c16;
+  border-bottom-color: #fffaf3;
+  padding-top: 9px;
+  font-weight: 700;
+  box-shadow: none;
+}
+@media (max-width: 720px) { html[data-dex="9"] nav button { padding: 5px 7px 4px; } html[data-dex="9"] nav button.on { padding-top: 7px; } }
+@media (max-width: 720px) {
+  html[data-dex] nav button { padding: 4px 4px; font-size: 0.7rem; }
+  html[data-dex="1"] nav button { padding: 4px 3px; font-size: 0.64rem; font-weight: 400; }
+  html[data-dex="1"] nav button.on { padding-left: 10px; font-weight: 700; }
+  html[data-dex="3"] nav button { padding: 4px 4px; }
+  html[data-dex="6"] nav button { padding: 4px 7px; }
+  html[data-dex="9"] nav button { padding: 4px 4px 3px; }
+  html[data-dex="9"] nav button.on { padding-top: 6px; }
+}
+@media (max-width: 720px) {
+  html[data-dex="2"] nav button { padding: 4px 3px; }
+  html[data-dex="3"] nav button { padding: 4px 3px; font-size: 0.64rem; }
+  html[data-dex="6"] nav button { padding: 4px 6px; }
+  html[data-dex="9"] header nav { gap: 1px; padding: 3px 2px 0; }
+  html[data-dex="9"] nav button { padding: 4px 3px 3px; font-size: 0.66rem; }
+}
+@media (min-width: 721px) and (max-width: 900px) { html[data-dex="3"] nav button { padding-left: 7px; padding-right: 7px; } }
+
+/* ======================================================================
+   Theme redesigns (Sinnoh, Unova, Kalos, Alola, Galar). Appended last so
+   they override the earlier per-theme rules at equal specificity.
+   ====================================================================== */
+
+/* ---- IV · Sinnoh: the red DS-era Pokédex from Diamond/Pearl/Platinum. Clamshell with a hinge;
+   the top screen holds the content, the nav sits on a lower "touch panel" strip; teal and red panels,
+   dark rounded entry bars, a pixel-ish readable face and the radial scroll wheel. ---- */
+html[data-dex="4"] {
+  color-scheme: light;
+  --desk: #2b0c10;
+  --bezel: #d8262f;
+  --bezel-deep: #8e1118;
+  --bezel-ink: #fff4f0;
+  --bg: #dff4f2;
+  --ink: #12302f;
+  --muted: #3f6463;
+  --card: #f7fffd;
+  --card-ink: #12302f;
+  --card-muted: #456b6a;
+  --coral: #d8262f;
+  --moss: #1c8f8a;
+  --line: rgba(18, 48, 47, 0.18);
+  --track: rgba(18, 48, 47, 0.14);
+  --field: #ffffff;
+  --field-ink: #12302f;
+  --glow: #5fd6cf;
+  --button: #d8262f;
+  --screen-bezel: #3a3f46;
+  --screen-radius: 10px;
+  --serif: "Trebuchet MS", "Lucida Grande", "Segoe UI", sans-serif;
+  --sans: "Trebuchet MS", "Lucida Grande", "Segoe UI", sans-serif;
+}
+html[data-dex="4"] .device {
+  position: relative;
+  background:
+    linear-gradient(180deg, transparent 0 46px, #a8141d 46px 52px, transparent 52px),
+    linear-gradient(180deg, #ef4b4f, #d8262f 30%, #b81a23);
+  border: 3px solid #7a0d14;
+  border-radius: 26px 26px 34px 34px;
+  padding: 58px 18px 18px;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), 0 24px 44px rgba(0, 0, 0, 0.4);
+}
+/* Hinge band across the clamshell, with its two barrels. */
+html[data-dex="4"] .device::before {
+  content: "";
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 14px;
+  height: 22px;
+  border-radius: 11px;
+  background:
+    linear-gradient(90deg, #7a0d14 0 64px, transparent 64px calc(100% - 64px), #7a0d14 calc(100% - 64px)),
+    linear-gradient(180deg, #c81f28, #9a141b);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25);
+}
+/* Radial scroll wheel motif, top right. */
+html[data-dex="4"] .device::after {
+  content: "";
+  position: absolute;
+  right: 34px;
+  top: 6px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #f7fffd 0 5px, #1c8f8a 6px 9px, transparent 10px),
+    repeating-conic-gradient(#12302f 0 12deg, #5fd6cf 12deg 30deg);
+  box-shadow: 0 0 0 3px #7a0d14;
+}
+html[data-dex="4"] .face { display: none; }
+html[data-dex="4"] .screen {
+  border: 8px solid #3a3f46;
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(0deg, rgba(18, 48, 47, 0.035) 0 2px, transparent 2px 4px),
+    linear-gradient(180deg, #e8faf8, #d2efec);
+  box-shadow: inset 0 0 0 2px #5fd6cf;
+}
+html[data-dex="4"] .controls { display: none; }
+html[data-dex="4"] h1 { letter-spacing: 0.02em; font-weight: 700; color: #e6fbf8; }
+html[data-dex="4"] .eyebrow { color: #d8262f; font-weight: 700; }
+/* Lower touch panel: the nav sits on a dark DS-style strip below the header. */
+html[data-dex="4"] header nav {
+  background: linear-gradient(180deg, #2c3138, #1d2126);
+  border: 0;
+  border-radius: 14px;
+  padding: 6px;
+  gap: 4px;
+  box-shadow: inset 0 0 0 2px #5fd6cf, 0 4px 0 #8e1118;
+}
+html[data-dex="4"] nav button {
+  border: 0;
+  border-radius: 999px;
+  background: #3b424b;
+  color: #cff6f2;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35);
+}
+html[data-dex="4"] nav button:hover { background: #4b545f; }
+html[data-dex="4"] nav button.on,
+html[data-dex="4"] nav button.open { background: #d8262f; color: #fff; border-color: #d8262f; box-shadow: inset 0 -2px 0 #7a0d14; }
+html[data-dex="4"] nav button:focus-visible { outline: 2px solid #5fd6cf; outline-offset: 1px; }
+/* Panels: teal headers and dark rounded entry bars in the Sinnoh list. */
+html[data-dex="4"] .card,
+html[data-dex="4"] .trait,
+html[data-dex="4"] .grid-card,
+html[data-dex="4"] .species-sheet { border: 2px solid #1c8f8a; box-shadow: 0 4px 0 rgba(18, 48, 47, 0.18); }
+html[data-dex="4"] .ledger li {
+  margin: 4px 0;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2c3138, #3a424b);
+  color: #e6fbf8;
+}
+html[data-dex="4"] .ledger li:nth-child(odd) { background: linear-gradient(90deg, #262b31, #343b43); }
+html[data-dex="4"] .ledger li .gen,
+html[data-dex="4"] .ledger li .games,
+html[data-dex="4"] .ledger li .sd { color: #9fe3dd; }
+
+/* ---- V · Unova: the Black/White Pokédex. Dark-gray slab, red-orange accent stripe, angular panels,
+   the lower-screen list as striped dark bars, condensed uppercase type. ---- */
+html[data-dex="5"] {
+  color-scheme: dark;
+  --desk: #0b0b0d;
+  --bezel: #2a2b2f;
+  --bezel-deep: #ef5a28;
+  --bezel-ink: #f2f2f2;
+  --bg: #1b1c20;
+  --ink: #f2f2f2;
+  --muted: #a9adb5;
+  --card: #26282d;
+  --card-ink: #f2f2f2;
+  --card-muted: #a9adb5;
+  --coral: #ef5a28;
+  --moss: #4fb3e8;
+  --line: rgba(242, 242, 242, 0.14);
+  --track: rgba(242, 242, 242, 0.12);
+  --field: #121316;
+  --field-ink: #f2f2f2;
+  --glow: #ef5a28;
+  --button: #ef5a28;
+  --screen-bezel: #111;
+  --serif: "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif;
+  --sans: "Helvetica Neue", Arial, "Segoe UI", sans-serif;
+}
+html[data-dex="5"] .device {
+  position: relative;
+  background:
+    linear-gradient(90deg, transparent 0 22px, #ef5a28 22px 30px, #c8381a 30px 33px, transparent 33px),
+    linear-gradient(180deg, #3a3b40, #2a2b2f 40%, #1c1d20);
+  border: 0;
+  border-radius: 6px;
+  padding: 16px 14px 14px 44px;
+  clip-path: polygon(0 0, calc(100% - 26px) 0, 100% 26px, 100% 100%, 26px 100%, 0 calc(100% - 26px));
+  box-shadow: none;
+}
+html[data-dex="5"] .face, html[data-dex="5"] .controls { display: none; }
+html[data-dex="5"] .screen {
+  border: 0;
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, #24252a, #1b1c20 220px);
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+  box-shadow: none;
+}
+html[data-dex="5"] h1 { font-family: var(--serif); text-transform: uppercase; letter-spacing: 0.06em; font-style: normal; }
+html[data-dex="5"] h2 { font-family: var(--serif); text-transform: uppercase; letter-spacing: 0.04em; font-style: normal; }
+html[data-dex="5"] .eyebrow { color: #ef5a28; letter-spacing: 0.22em; }
+html[data-dex="5"] .card,
+html[data-dex="5"] .trait,
+html[data-dex="5"] .grid-card,
+html[data-dex="5"] .species-sheet,
+html[data-dex="5"] .facts div {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  border-top: 3px solid #ef5a28;
+  box-shadow: none;
+}
+html[data-dex="5"] .species-sheet { clip-path: none; }
+html[data-dex="5"] .ledger li { border-top: 0; border-left: 4px solid transparent; background: #232428; }
+html[data-dex="5"] .ledger li:nth-child(even) { background: #2c2d32; }
+html[data-dex="5"] .ledger li:hover,
+html[data-dex="5"] .ledger li:focus-visible { border-left-color: #ef5a28; background: #34353b; }
+html[data-dex="5"] header nav {
+  background: #111214;
+  border: 0;
+  border-bottom: 3px solid #ef5a28;
+  border-radius: 0;
+  padding: 4px 4px 0;
+  gap: 3px;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+}
+html[data-dex="5"] nav button {
+  border: 0;
+  border-radius: 0;
+  background: #2a2b2f;
+  color: #d9dade;
+  font-family: var(--serif);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  text-shadow: none;
+  box-shadow: none;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  padding-left: 14px;
+  padding-right: 14px;
+}
+html[data-dex="5"] nav button:hover { background: #3a3b40; color: #fff; }
+html[data-dex="5"] nav button.on,
+html[data-dex="5"] nav button.open { background: #ef5a28; color: #fff; border: 0; box-shadow: none; }
+html[data-dex="5"] nav button:focus-visible { outline: 0; background: #fff; color: #111; }
+
+/* ---- VI · Kalos: the Holo Caster (X/Y). A dark rounded wrist-device frame projecting a translucent
+   cyan hologram: glowing edges, faint scanlines, thin futuristic sans. ---- */
+html[data-dex="6"] {
+  color-scheme: dark;
+  --desk: #04101a;
+  --bezel: #1b222b;
+  --bezel-deep: #4fe3ff;
+  --bezel-ink: #c9f6ff;
+  --bg: #061724;
+  --ink: #c9f6ff;
+  --muted: #7fb9c9;
+  --card: rgba(79, 227, 255, 0.07);
+  --card-ink: #d8faff;
+  --card-muted: #8cc6d4;
+  --coral: #4fe3ff;
+  --moss: #9cf7d8;
+  --line: rgba(79, 227, 255, 0.22);
+  --track: rgba(79, 227, 255, 0.16);
+  --field: rgba(4, 22, 34, 0.9);
+  --field-ink: #d8faff;
+  --glow: #4fe3ff;
+  --button: #4fe3ff;
+  --screen-bezel: transparent;
+  --serif: "Segoe UI Light", "Helvetica Neue", "Avenir Next", "Segoe UI", sans-serif;
+  --sans: "Segoe UI", "Helvetica Neue", "Avenir Next", sans-serif;
+}
+html[data-dex="6"] body { background: radial-gradient(ellipse at 50% 0, #0c2c3f, #02080e 70%); }
+html[data-dex="6"] .device {
+  position: relative;
+  background: linear-gradient(180deg, #2a323c, #161b22);
+  border: 2px solid #3a4652;
+  border-radius: 40px;
+  clip-path: none;
+  padding: 22px 18px 18px;
+  box-shadow: inset 0 0 0 6px #10151b, 0 0 0 1px #4fe3ff55, 0 0 40px rgba(79, 227, 255, 0.18), 0 24px 40px rgba(0, 0, 0, 0.5);
+}
+/* Wrist strap stubs. */
+html[data-dex="6"] .device::before,
+html[data-dex="6"] .device::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 34%;
+  height: 14px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #232a33, #12171d);
+  border: 1px solid #3a4652;
+}
+html[data-dex="6"] .device::before { top: -14px; border-radius: 10px 10px 0 0; }
+html[data-dex="6"] .device::after { bottom: -14px; border-radius: 0 0 10px 10px; }
+html[data-dex="6"] .face, html[data-dex="6"] .controls { display: none; }
+html[data-dex="6"] .screen {
+  border: 1px solid rgba(79, 227, 255, 0.55);
+  border-radius: 26px;
+  clip-path: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(79, 227, 255, 0.045) 0 1px, transparent 1px 4px),
+    radial-gradient(ellipse at 50% -10%, rgba(79, 227, 255, 0.22), transparent 60%),
+    #061724;
+  box-shadow: inset 0 0 24px rgba(79, 227, 255, 0.25), 0 0 18px rgba(79, 227, 255, 0.25);
+}
+html[data-dex="6"] h1, html[data-dex="6"] h2 { font-family: var(--serif); font-weight: 300; font-style: normal; letter-spacing: 0.04em; color: #e6fdff; text-shadow: 0 0 12px rgba(79, 227, 255, 0.55); }
+html[data-dex="6"] .eyebrow { color: #4fe3ff; letter-spacing: 0.3em; }
+html[data-dex="6"] .card,
+html[data-dex="6"] .trait,
+html[data-dex="6"] .grid-card,
+html[data-dex="6"] .facts div {
+  border: 1px solid rgba(79, 227, 255, 0.45);
+  box-shadow: inset 0 0 18px rgba(79, 227, 255, 0.12), 0 0 12px rgba(79, 227, 255, 0.12);
+  backdrop-filter: blur(2px);
+}
+html[data-dex="6"] .species-sheet { background: #071c2a; border: 1px solid #4fe3ff; box-shadow: 0 0 30px rgba(79, 227, 255, 0.35); }
+html[data-dex="6"] .ledger li { border-top-color: rgba(79, 227, 255, 0.16); }
+html[data-dex="6"] .ledger li:hover { background: rgba(79, 227, 255, 0.08); }
+html[data-dex="6"] .grid-cell, html[data-dex="6"] .form-pop { background: rgba(79, 227, 255, 0.06); }
+html[data-dex="6"] .form-pop { background: #071c2a; }
+html[data-dex="6"] header nav {
+  background: rgba(79, 227, 255, 0.06);
+  border: 1px solid rgba(79, 227, 255, 0.4);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+  box-shadow: 0 0 14px rgba(79, 227, 255, 0.2);
+}
+html[data-dex="6"] nav button {
+  clip-path: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #9fe9f7;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+html[data-dex="6"] nav button:hover { border-color: rgba(79, 227, 255, 0.5); color: #e6fdff; }
+html[data-dex="6"] nav button.on,
+html[data-dex="6"] nav button.open { background: rgba(79, 227, 255, 0.22); color: #fff; border-color: #4fe3ff; box-shadow: 0 0 10px rgba(79, 227, 255, 0.6); text-shadow: 0 0 6px #4fe3ff; }
+html[data-dex="6"] nav button:focus-visible { outline: 0; border-color: #fff; background: rgba(79, 227, 255, 0.3); color: #fff; }
+
+/* ---- VII · Alola and VIII · Galar: Rotom arms. They used to sit at a percentage of the device
+   height (42% / 34%), so on long views (Rankings, Model, History) they slid far down or off screen and
+   seemed to vanish when switching tabs, and a ≤900px rule removed them outright. Now they are pinned a
+   fixed distance from the top, stay at every width (smaller on phones), and only float gently. ---- */
+@keyframes rotom-float {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -4px; }
+}
+html[data-dex="7"] .device,
+html[data-dex="8"] .device { position: relative; overflow: visible; }
+html[data-dex="7"] .device::before,
+html[data-dex="7"] .device::after {
+  display: block;
+  top: 150px;
+  animation: rotom-float 4.8s ease-in-out infinite;
+}
+html[data-dex="7"] .device::after { animation-delay: -2.4s; }
+
+/* Alola: red rounded body, blue-white face screen, app shell in orange/red with white rounded panels. */
+html[data-dex="7"] {
+  --bg: #f3f8ff;
+  --card: #ffffff;
+  --screen-bezel: #eaf3ff;
+}
+html[data-dex="7"] .device {
+  border-radius: 44px 44px 52px 52px;
+  background:
+    radial-gradient(ellipse at 50% 0, #ff7280 0 40px, transparent 41px),
+    linear-gradient(180deg, #ff4f5e, #e4263a 30%, #c4122c);
+}
+html[data-dex="7"] .screen {
+  border-radius: 26px;
+  background: linear-gradient(180deg, #ff8a3d 0 132px, #f3f8ff 132px);
+}
+html[data-dex="7"] .card,
+html[data-dex="7"] .trait,
+html[data-dex="7"] .grid-card,
+html[data-dex="7"] .facts div { border-radius: 22px; box-shadow: 0 6px 18px rgba(196, 18, 44, 0.12); }
+html[data-dex="7"] h1, html[data-dex="7"] .brand .eyebrow { color: #fff; text-shadow: 0 2px 0 rgba(160, 30, 10, 0.35); }
+html[data-dex="7"] .progress, html[data-dex="7"] .progress * { color: #fff; }
+@media (max-width: 900px) {
+  /* Phones: the arms tuck half over the bezel so the screen keeps its width. */
+  html[data-dex="7"] .device { width: calc(100% - 24px); }
+  html[data-dex="7"] .device::before,
+  html[data-dex="7"] .device::after { display: block; width: 26px; height: 36px; top: 120px; }
+  html[data-dex="7"] .device::before { left: -12px; }
+  html[data-dex="7"] .device::after { right: -12px; }
+}
+
+/* Galar: the Rotom Phone. Red case with eyes, a bolt arm on each side, clean white SwSh UI with black
+   tiles and red accents. */
+html[data-dex="8"] .device::before,
+html[data-dex="8"] .device::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 120px;
+  width: 54px;
+  height: 70px;
+  background: linear-gradient(#ff8b74, #e23b2a);
+  filter: drop-shadow(2px 3px 0 #6d120e);
+  animation: rotom-float 5.2s ease-in-out infinite;
+}
+html[data-dex="8"] .device::before {
+  left: -44px;
+  clip-path: polygon(100% 8%, 40% 0, 62% 38%, 0 30%, 46% 100%, 34% 58%, 100% 64%);
+}
+html[data-dex="8"] .device::after {
+  right: -44px;
+  bottom: auto;
+  clip-path: polygon(0 8%, 60% 0, 38% 38%, 100% 30%, 54% 100%, 66% 58%, 0 64%);
+  animation-delay: -2.6s;
+}
+html[data-dex="8"] .device { width: min(1180px, calc(100% - 100px)); }
+html[data-dex="8"] .antenna { animation: rotom-float 6s ease-in-out infinite; }
+html[data-dex="8"] .screen { background: #ffffff; }
+html[data-dex="8"] .card,
+html[data-dex="8"] .trait,
+html[data-dex="8"] .grid-card,
+html[data-dex="8"] .facts div { border-radius: 18px; border: 1px solid #e6e1de; box-shadow: 0 2px 0 #e6e1de; }
+html[data-dex="8"] .facts div { background: #1a1a1a; color: #fff; }
+html[data-dex="8"] .facts div dt { color: #ff8b74; }
+html[data-dex="8"] h1 { color: #1a1a1a; }
+html[data-dex="8"] .eyebrow { color: #e23b2a; font-weight: 700; }
+@media (max-width: 900px) {
+  html[data-dex="8"] .device { width: calc(100% - 24px); }
+  html[data-dex="8"] .device::before,
+  html[data-dex="8"] .device::after { width: 26px; height: 36px; top: 96px; }
+  html[data-dex="8"] .device::before { left: -12px; }
+  html[data-dex="8"] .device::after { right: -12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-dex="7"] .device::before,
+  html[data-dex="7"] .device::after,
+  html[data-dex="8"] .device::before,
+  html[data-dex="8"] .device::after,
+  html[data-dex="8"] .antenna { animation: none; }
+}
+@media (max-width: 480px) {
+  .contrib-head, .species-sheet .contrib li { grid-template-columns: minmax(4.5em, 1fr) 3.4em 3.8em 4.4em; gap: 4px; }
+  .contrib-head { font-size: 0.6rem; letter-spacing: 0; }
+  .contrib-head span { overflow-wrap: anywhere; }
+  .species-sheet .contrib li { font-size: 0.8rem; }
+}
+/* Phones: the redesigned Sinnoh, Unova and Kalos tabs compact like the others so they stay on one row. */
+@media (max-width: 720px) {
+  html[data-dex="4"] header nav,
+  html[data-dex="5"] header nav,
+  html[data-dex="6"] header nav { gap: 1px; padding: 3px; }
+  html[data-dex="4"] nav button,
+  html[data-dex="5"] nav button,
+  html[data-dex="6"] nav button { padding: 4px 5px; font-size: 0.7rem; letter-spacing: 0; }
+  html[data-dex="5"] nav button { clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%); padding-left: 6px; padding-right: 6px; }
+}
+@media (max-width: 400px) {
+  html[data-dex="4"] nav button,
+  html[data-dex="5"] nav button,
+  html[data-dex="6"] nav button { padding: 4px 3px; font-size: 0.64rem; }
+  html[data-dex="5"] nav button { padding-left: 4px; padding-right: 4px; }
 }

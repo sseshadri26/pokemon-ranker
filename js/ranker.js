@@ -418,6 +418,7 @@
     var byId = new Map(pokemon.map(function (p) { return [p.id, p]; }));
     var state = null;
     var lastFit = null;
+    var effectsCache = null;
     var rankingMode = options.rankingMode === "bradley-terry" ? "bradley-terry" : "full";
     var boardVisible = false;
     var historyToken = 0;
@@ -511,7 +512,7 @@
         ? { a: forced.a, b: forced.b }
         : null;
       lastGames = games;
-      var pair = forcedPair || pickPair(fit, games, last ? [last.a, last.b] : undefined);
+      var pair = forcedPair || noteShown(pickPair(fit, games, last ? [last.a, last.b] : undefined));
       fullRows = rowsFrom(fit, games);
       var rows = fullRows;
       if (rankingMode === "bradley-terry" || boardVisible) {
@@ -536,6 +537,27 @@
       return state;
     }
 
+    // Pairs shown lately, newest last: seeded from the saved tail, then every pair drawn this
+    // session (skipped ones included). In memory only.
+    var RECENT_PAIRS = 10;
+    var recentPairs = null;
+    function recentIds() {
+      if (!recentPairs) {
+        recentPairs = history.slice(-RECENT_PAIRS).map(function (e) { return [e.a, e.b]; });
+      }
+      var ids = [];
+      recentPairs.slice(-RECENT_PAIRS).forEach(function (p) { ids.push(p[0], p[1]); });
+      return ids;
+    }
+    function noteShown(pair) {
+      if (!pair) return pair;
+      recentIds();
+      var last = recentPairs[recentPairs.length - 1];
+      if (!last || last[0] !== pair.a || last[1] !== pair.b) recentPairs.push([pair.a, pair.b]);
+      if (recentPairs.length > RECENT_PAIRS * 2) recentPairs = recentPairs.slice(-RECENT_PAIRS);
+      return pair;
+    }
+
     function pickPair(fit, games, avoid) {
       return F.selectNextPair(
         {
@@ -548,7 +570,11 @@
           explore: options.explore === undefined ? 0.12 : options.explore,
           games: games,
           avoid: avoid,
+          recent: recentIds(),
           rng: options.rng,
+          topN: options.topN,
+          topBoost: options.topBoost,
+          topPairs: options.topPairs,
         },
       );
     }
@@ -590,7 +616,7 @@
           // A skip only moves on. Nothing is recorded, saved, or fitted; the skipped
           // pair is avoided for the next draw, in memory only.
           forced = null;
-          state.pair = pickPair(lastFit, lastGames, [state.pair.a, state.pair.b]);
+          state.pair = noteShown(pickPair(lastFit, lastGames, [state.pair.a, state.pair.b]));
           return state;
         }
         lock = true;
@@ -726,6 +752,18 @@
         state.rows = mode === "bradley-terry" ? ensurePlain().rows : fullRows;
         return state;
       },
+      // Model tab: average total effect of each column (linear + network), computed on first
+      // request and cached per fit. Null in Bradley–Terry-only mode (no network there).
+      totalEffects: function () {
+        if (!lastFit || rankingMode === "bradley-terry") return null;
+        if (effectsCache && effectsCache.fit === lastFit) return effectsCache;
+        var started = Date.now();
+        var list = F.totalEffects(design.values, design.rows, design.cols, design.names, lastFit.weights, lastFit.network);
+        var byName = {};
+        list.forEach(function (row) { byName[row.name] = row; });
+        effectsCache = { fit: lastFit, byName: byName, ms: Date.now() - started, network: Boolean(lastFit.network) };
+        return effectsCache;
+      },
       setBoardVisible: function (visible) {
         var next = Boolean(visible);
         if (next === boardVisible) {
@@ -785,6 +823,7 @@
           rank: ranked ? ranked.rank : null,
           strength: strength,
           sd: ranked ? ranked.sd : active.sd[index],
+          uncertainty: plain ? null : F.uncertaintyBreakdown(lastFit, index),
           games: ranked ? ranked.games : 0,
           record: {
             wins: record.wins,

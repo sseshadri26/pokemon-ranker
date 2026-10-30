@@ -1,6 +1,6 @@
-# PokeRanker
+# PokéRanker
 
-Rank the National Dex by how much **you** like each Pokémon. PokeRanker shows two species at a time. Every answer updates a personal Bradley–Terry ranking. Nothing leaves the browser: there is no account and no server.
+Rank the National Dex by how much **you** like each Pokémon. PokéRanker shows two species at a time. Every answer updates a personal Bradley–Terry ranking. Nothing leaves the browser: there is no account and no server.
 
 The ranked unit is the **base species** (National Dex #1 through the latest in PokéAPI, 1,025 as of this bundle). Every alternate form — Mega, Gigantamax, regional, and the rest — is drawn on that species' card. One vote covers all of them. They are not separate ranked entries.
 
@@ -35,6 +35,8 @@ The main form fills the middle of the picture. A Mega or Gigantamax form is smal
 **Rankings** is the full order, with a score, a Laplace uncertainty, and how many matchups that species has been in. Filter by type or generation, or search by name. Drag a row, or use its Up and Down controls, to move a species. The move is stored as a comparison against each species it passed — repeated, still only against those neighbors, when one result would not hold after the refit — and the ranking is fit again. The header shows the matchup count and a confidence percentage. Undo walks back through those comparisons and puts each removed matchup, including a skip, back on the duel.
 
 **Model** names the predictor: hierarchical Bradley–Terry, strength `s = x·w + b`, the normal priors on the weights and the species offsets, and the alternating Newton fit. Under that it lists every trait category in `x` — type, generation, color, shape, habitat, egg group, legendary, mythical, baby, evolution stage, and starter — and the learned weight and Laplace standard deviation of each column.
+
+**Grids** builds tables of favorites. Each row and column header is a trait — type (any slot, counting regional and alternate forms but not Mega or Gigantamax), pure single type, generation, colour, shape, habitat, egg group, evolution stage, fully evolved, legendary, mythical, baby, starter line, has a Mega / Gigantamax / regional form, or game — or **All** for no filter. Each cell shows your highest-ranked Pokémon with both traits, in the order Rankings is using (full model or Bradley–Terry), and opens its detail panel. Make as many grids as you like; they are saved under `pokeranker.grids.v1` and travel in Export and Import.
 
 **Data** opens Export, Import, and Reset. **Export** downloads the full answer history as JSON. **Import** reads a JSON export (including older `favordex-history.json` files) and asks whether to **Append** — merge into the current history, skipping exact duplicates (same pair, outcome, and timestamp) and ordering by time — or **Replace** the current history with the file's. **Reset** clears it. History lives in `localStorage` under `pokeranker.history.v1` (an existing `favordex.history.v1` from before the rename is read when the new key is absent). Skips are not stored.
 

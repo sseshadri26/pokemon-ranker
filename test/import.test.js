@@ -85,12 +85,14 @@ describe("storage rename", () => {
     assert.equal(readKey(fake({ "favordex.ranking.v1": "bradley-terry" }), RANKING_MODE_KEY), "bradley-terry");
     assert.equal(readKey(fake({}), STORAGE_KEY), null);
   });
-  it("shows PokeRanker in the page and downloads pokeranker-history.json", () => {
+  it("shows PokéRanker (with the accent and a utf-8 charset) in the page and downloads pokeranker-history.json", () => {
     const root = path.join(__dirname, "..");
     const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
     const app = fs.readFileSync(path.join(root, "js", "app.js"), "utf8");
-    assert.match(html, /<title>PokeRanker<\/title>/);
-    assert.match(html, /<h1>PokeRanker<\/h1>/);
+    assert.match(html, /<title>PokéRanker<\/title>/);
+    assert.match(html, /<h1>PokéRanker<\/h1>/);
+    assert.match(html, /<meta charset="utf-8">/i);
+    assert.match(app, /"PokéRanker"/);
     assert.match(html, /id="import-append"/);
     assert.match(html, /id="import-replace"/);
     assert.match(app, /pokeranker-history\.json/);

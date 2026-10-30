@@ -480,7 +480,7 @@ describe("page files", () => {
     assert.match(html, /id="model"/);
     assert.match(html, /id="model-network"/);
     assert.match(html, /Hierarchical Bradley–Terry/);
-    const nav = html.slice(html.indexOf("<nav>"), html.indexOf("</nav>"));
+    const nav = html.slice(html.indexOf("<nav"), html.indexOf("</nav>"));
     assert.match(nav, /id="data-menu"/);
     assert.match(nav, />Data</);
     assert.equal(nav.includes('id="export"'), false);

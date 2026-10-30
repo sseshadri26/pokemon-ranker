@@ -1,7 +1,7 @@
 /* PokeRanker page. Classic script. Opens from index.html with no server. */
 (function () {
   var TYPE_ORDER = [
-    "normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison", "ground",
+    "normal", "fire", "water", "grass", "electric", "ice", "fighting", "poison", "ground",
     "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy",
   ];
   var TYPE_COLORS = {
@@ -24,7 +24,15 @@
     return "full";
   }
   var ranker = window.FavordexRanker.createRanker(pokemon, { rankingMode: savedRankingMode() });
-  var view = "duel";
+  var view = (function () {
+    var saved = null;
+    try {
+      saved = localStorage.getItem(window.PokeRankerTabs.STORAGE_KEY);
+    } catch (error) {
+      /* No saved tab. */
+    }
+    return window.PokeRankerTabs.initialView(location.hash, saved);
+  })();
   var pairKey = "";
   var offset = 0;
   var drag = null;
@@ -68,6 +76,9 @@
     viewHistory: document.getElementById("view-history"),
     viewBoard: document.getElementById("view-board"),
     viewModel: document.getElementById("view-model"),
+    viewGrids: document.getElementById("view-grids"),
+    grids: document.getElementById("grids"),
+    gridList: document.getElementById("grid-list"),
     history: document.getElementById("history"),
     historyCount: document.getElementById("history-count"),
     matchLog: document.getElementById("match-log"),
@@ -625,8 +636,28 @@
       fact("Answers in the fit", model.comparisons.toLocaleString()) +
       fact("Newton steps", String(model.iterations) + (model.converged ? ", converged" : ", still moving")) +
       fact("Columns in x", model.columns.toLocaleString()) +
+      (effects ? fact("Total effect", "The linear weight is the direct effect; the total also includes the network's average contribution" +
+        (effects.network ? "" : " (the network is off, so they match)") + ". Computed in " + effects.ms + " ms.") : "") +
       networkFact;
-    function weightRow(name, weight, sd) {
+    // Total effect: linear weight plus the network's average contribution, computed once per fit.
+    var effects = ranker.totalEffects();
+    var GAME_NOTE = "Game columns hold shares (1/n for a species in n games). The total effect here is one full unit of " +
+      "this game column (as for a species found only in this game), with the species' other game shares unchanged.";
+    function totalCell(key) {
+      if (!effects) return "";
+      var e = effects.byName[key];
+      if (!e) return '<span class="trait-total"></span>';
+      var unit = e.kind === "continuous" ? " per 1 SD" : "";
+      var tip = "Average total effect on x·w + EV(x)" + unit + ", over all species. Middle 80% of species: " +
+        formatScore(e.p10) + " to " + formatScore(e.p90) + " (SD " + e.sd.toFixed(2) + ")." +
+        (e.kind === "continuous" ? " The linear weight is per unit; 1 SD of this column is " + e.colSd.toFixed(2) + "." : "") +
+        (e.kind === "share" ? " " + GAME_NOTE : "") +
+        (e.kind === "one-hot" ? " Compared with the whole block off, so the row never has two columns of the block on." : "");
+      var spread = e.p90 - e.p10 > 0.005 ? '<small>' + formatScore(e.p10) + "…" + formatScore(e.p90) + "</small>" : "";
+      return '<span class="trait-total" title="' + esc(tip) + '">' + formatScore(e.mean) +
+        (unit ? "<small>/SD</small>" : "") + spread + "</span>";
+    }
+    function weightRow(name, weight, sd, key) {
       var w = Number.isFinite(weight) ? weight : 0;
       var s = Number.isFinite(sd) ? sd : 0;
       var tone = w > 0.0005 ? "up" : w < -0.0005 ? "down" : "flat";
@@ -637,7 +668,7 @@
         '<span class="track" title="' + esc(formatScore(w) + " " + formatSd(s)) + '">' +
         '<i class="' + tone + '" style="' + edge + ";width:" + share.toFixed(2) + '%"></i></span>' +
         '<span class="trait-num ' + tone + '">' + formatScore(w) + "</span>" +
-        '<span class="trait-sd">' + formatSd(s) + "</span></li>";
+        '<span class="trait-sd">' + formatSd(s) + "</span>" + totalCell(key) + "</li>";
     }
     function featureLabel(name) {
       var c, w;
@@ -653,11 +684,12 @@
       var rows = category.weights.length === 0
         ? '<p class="trait-empty">Nothing in this dex turns this category on.</p>'
         : "<ol>" + category.weights.map(function (row) {
-          return weightRow(traitLabel(category.id, row.key), row.weight, row.sd);
+          return weightRow(traitLabel(category.id, row.key), row.weight, row.sd, row.key);
         }).join("") + "</ol>";
       return '<section class="trait" data-category="' + esc(category.id) + '">' +
         "<h3>" + esc(category.label) + ' <span class="encoding">' + esc(category.encoding) + "</span></h3>" +
         "<p>" + esc(category.detail) + "</p>" +
+        (effects ? '<p class="trait-cols">Weight · ± · <b>Total</b>' + (category.id === "games" ? ' <span title="' + esc(GAME_NOTE) + '">(games: one full unit ⓘ)</span>' : "") + "</p>" : "") +
         '<p class="trait-count">' + category.weights.length +
         (category.weights.length === 1 ? " column" : " columns") + "</p>" +
         rows + "</section>";
@@ -894,6 +926,7 @@
       '<div><dt>Rank</dt><dd data-testid="species-rank">' + detail.rank + "</dd></div>" +
       '<div><dt>Strength</dt><dd data-testid="species-strength">' + formatScore(detail.strength) + "</dd></div>" +
       '<div><dt>Uncertainty</dt><dd data-testid="species-uncertainty">' + formatSd(detail.sd) + "</dd></div>" +
+      uncertaintyRows(detail.uncertainty) +
       '<div><dt>Matchups</dt><dd data-testid="species-matchups-count">' + detail.games + "</dd></div>" +
       "</dl>" +
       '<p class="certainty" data-testid="species-certainty">' + esc(certaintyPhrase(detail.sd)) + "</p>" +
@@ -915,15 +948,57 @@
     els.speciesClose.focus({ preventScroll: true });
   }
 
+  // Full model only: how the ± splits into a trait part and the species' own adjustment, plus
+  // the old figure that added the two as if independent. Display only; the picker uses the ±.
+  function uncertaintyRows(u) {
+    if (!u) return "";
+    return '<div class="unc-split" data-testid="species-uncertainty-split"><dt>Split</dt><dd>' +
+      "traits " + formatSd(u.trait) + " · own " + formatSd(u.own) + "</dd></div>" +
+      '<div class="unc-split" data-testid="species-uncertainty-naive" title="Adds the trait and own-adjustment parts as if independent. ' +
+      'It ignores the trade-off between them: when the traits push one way, the own adjustment moves to compensate.">' +
+      "<dt>Uncorrected</dt><dd>" + formatSd(u.naive) +
+      ' <small>old figure, ignores the traits/own trade-off</small></dd></div>';
+  }
+
+  var Tabs = window.PokeRankerTabs;
+  function rememberTab() {
+    try {
+      localStorage.setItem(Tabs.STORAGE_KEY, view);
+    } catch (error) {
+      /* The tab still works for this visit. */
+    }
+    var hash = Tabs.hashFor(view);
+    if (location.hash !== hash) {
+      // A tab click adds a history entry so Back returns to the previous tab.
+      if (tabNavigated) history.pushState(null, "", hash);
+      else history.replaceState(null, "", hash);
+    }
+    tabNavigated = false;
+  }
+  var tabNavigated = false;
+  document.querySelector("nav").addEventListener("click", function () {
+    tabNavigated = true;
+  }, true);
+  window.addEventListener("hashchange", function () {
+    var next = Tabs.fromHash(location.hash);
+    if (next && next !== view) {
+      view = next;
+      render();
+    }
+  });
+
   function render() {
+    rememberTab();
     ranker.setBoardVisible(view === "board");
-    if (view !== "board") hideSpecies(false);
+    if (view !== "board" && view !== "grids") hideSpecies(false);
     renderHeader();
     var pair = sides();
     var showDuel = view === "duel" && pair.left && pair.right;
     els.duel.hidden = !showDuel;
     els.board.hidden = view !== "board";
     els.model.hidden = view !== "model";
+    els.grids.hidden = view !== "grids";
+    els.viewGrids.className = view === "grids" ? "on" : "";
     els.history.hidden = view !== "history";
     els.setup.hidden = view !== "setup";
     els.noDuel.hidden = view !== "duel" || Boolean(pair.left && pair.right);
@@ -932,6 +1007,10 @@
     els.viewHistory.className = view === "history" ? "on" : "";
     els.viewBoard.className = view === "board" ? "on" : "";
     els.viewModel.className = view === "model" ? "on" : "";
+    [els.viewDuel, els.viewChoose, els.viewHistory, els.viewBoard, els.viewGrids, els.viewModel].forEach(function (tab) {
+      if (tab.className === "on") tab.setAttribute("aria-current", "page");
+      else tab.removeAttribute("aria-current");
+    });
     document.body.classList.toggle("view-duel", view === "duel");
     if (showDuel) renderDuel();
     if (view === "board") renderBoard();
@@ -939,6 +1018,7 @@
       showSpecies(speciesReturnId);
     }
     if (view === "model") renderModel();
+    if (view === "grids") renderGrids();
     if (view === "history") renderHistory();
   }
 
@@ -1109,6 +1189,578 @@
   document.getElementById("rank-bt").addEventListener("click", function () {
     chooseRanking("bradley-terry");
   });
+  // ---- Grids ----
+  var Grids = window.PokeRankerGrids;
+  var grids = Grids.load(localStorage);
+  var traitList = Grids.traitOptions(pokemon);
+  var gridTraitName = new Map(traitList.map(function (t) { return [t.id, t.label]; }));
+  var traitGroups = [];
+  var traitSelectHtml = (function () {
+    var html = "";
+    var group = null;
+    traitList.forEach(function (t) {
+      if (t.group !== group) {
+        if (group) html += "</optgroup>";
+        group = t.group;
+        if (group) {
+          // A select can't make the group heading clickable, so each group starts with an "add all" entry.
+          traitGroups.push(group);
+          var count = traitList.filter(function (o) { return o.group === group; }).length;
+          html += '<optgroup label="' + esc(group) + '"><option value="addall:' + (traitGroups.length - 1) + '">All ' +
+            esc(group) + " (" + count + ") →</option>";
+        }
+      }
+      html += '<option value="' + esc(t.id) + '">' + esc(t.label) + "</option>";
+    });
+    if (group) html += "</optgroup>";
+    return html;
+  })();
+
+  function saveGrids() {
+    try {
+      Grids.save(localStorage, grids);
+    } catch (error) {
+      /* The grids still work for this visit. */
+    }
+  }
+
+  function traitSelect(axis, index, value, gridName) {
+    var label = (axis === "row" ? "Row " : "Column ") + (index + 1) + " trait, " + gridName;
+    // The visible label wraps; the select sits invisibly on top so nothing is clipped.
+    var html = '<span class="axis-label" aria-hidden="true">' + esc(gridTraitName.get(value) || value) + "</span>" +
+      '<select data-axis="' + axis + '" data-i="' + index + '" aria-label="' + esc(label) + '">' + traitSelectHtml + "</select>";
+    return html.replace('value="' + esc(value) + '"', 'value="' + esc(value) + '" selected');
+  }
+
+  function gridCellHtml(grid, found, rowTrait, colTrait, r, c) {
+    if (!found.best) {
+      var why = found.count ? "Every match is already used elsewhere (No duplicates)" : "No Pokémon fits this cell and the grid rules";
+      return '<td class="grid-cell none" title="' + why + '">–</td>';
+    }
+    var mon = found.best.pokemon;
+    var form = Grids.cellForm(grid, mon, rowTrait, colTrait) || { name: mon.name, art: mon.art };
+    var hint = form.name + " · #" + found.best.rank + " · " + found.count.toLocaleString() +
+      (found.count === 1 ? " match" : " matches") +
+      (found.next ? " · next: " + found.next.pokemon.name + " #" + found.next.rank : "");
+    return '<td class="grid-cell"><button type="button" class="grid-pick" data-id="' + mon.id + '" data-r="' + r +
+      '" data-c="' + c + '" title="' + esc(hint) + '" aria-label="' + esc(hint) + '">' +
+      '<span class="grid-art">' + portraitHtml(form.art || mon.art, form.pixel, mon.name) + "</span>" +
+      '<span class="grid-name" aria-hidden="true">' + esc(mon.name) + "</span>" +
+      '<span class="grid-rank" aria-hidden="true">' + found.best.rank + "</span></button></td>";
+  }
+
+  var ruleSelectHtml = '<option value="" selected>+ Add rule…</option>' +
+    traitSelectHtml.replace(/<option value="addall:[^"]*">[^<]*<\/option>/g, "").replace('<option value="all">All</option>', "");
+
+  function rulesHtml(grid) {
+    var chips = (grid.rules || []).map(function (rule, i) {
+      var name = gridTraitName.get(rule.trait) || rule.trait;
+      var ex = rule.mode === "exclude";
+      return '<span class="rule-chip' + (ex ? " ex" : "") + '">' +
+        '<button type="button" class="rule-mode" data-act="rule-mode" data-i="' + i + '" title="Switch between must have and must not have" aria-label="' +
+        esc((ex ? "Exclude " : "Include ") + name + ", switch") + '">' + (ex ? "Not" : "Only") + "</button>" +
+        '<span class="rule-name">' + esc(name) + "</span>" +
+        '<button type="button" class="rule-x" data-act="rule-del" data-i="' + i + '" aria-label="Remove rule ' + esc(name) + '">×</button></span>';
+    }).join("");
+    var summary = Grids.rulesText(grid, function (t) { return gridTraitName.get(t); });
+    return '<div class="grid-rules"><span class="grid-rules-label">Rules</span>' + chips +
+      '<label class="rule-add"><span class="sr-only">Add a rule to ' + esc(grid.name) + '</span><select class="rule-select">' + ruleSelectHtml + "</select></label>" +
+      '<label class="rule-unique"><input type="checkbox" class="rule-unique-box"' + (grid.unique ? " checked" : "") + "> No duplicates</label>" +
+      (summary ? '<span class="grid-rules-sum" title="Same category: any one of them. Different categories: all of them.">Every cell: ' + esc(summary) + "</span>" : "") +
+      "</div>";
+  }
+
+  function renderGrids() {
+    var rows = state().rows;
+    if (grids.length === 0) {
+      els.gridList.innerHTML = '<p class="empty">No grids yet. Make one with New grid.</p>';
+      return;
+    }
+    els.gridList.innerHTML = grids.map(function (grid) {
+      var cells = Grids.gridCells(grid, rows);
+      var head = '<th class="grid-corner" scope="col"><button type="button" data-act="add-row">+ Row</button>' +
+        '<button type="button" data-act="add-col">+ Column</button></th>' +
+        grid.cols.map(function (trait, c) {
+          return '<th scope="col"><div class="grid-axis">' + traitSelect("col", c, trait, grid.name) +
+            (grid.cols.length > 1 ? '<button type="button" class="grid-x" data-act="del-col" data-i="' + c +
+              '" aria-label="Remove column ' + esc(gridTraitName.get(trait) || trait) + '">×</button>' : "") +
+            "</div></th>";
+        }).join("");
+      var body = grid.rows.map(function (rowTrait, r) {
+        return '<tr><th scope="row"><div class="grid-axis">' + traitSelect("row", r, rowTrait, grid.name) +
+          (grid.rows.length > 1 ? '<button type="button" class="grid-x" data-act="del-row" data-i="' + r +
+            '" aria-label="Remove row ' + esc(gridTraitName.get(rowTrait) || rowTrait) + '">×</button>' : "") +
+          "</div></th>" +
+          grid.cols.map(function (colTrait, c) { return gridCellHtml(grid, cells[r][c], rowTrait, colTrait, r, c); }).join("") + "</tr>";
+      }).join("");
+      return '<article class="grid-card" data-grid="' + esc(grid.id) + '">' +
+        '<div class="grid-title"><input class="grid-title-input" value="' + esc(grid.name) + '" aria-label="Grid name" maxlength="80">' +
+        '<button type="button" data-act="png" title="Download this grid as a picture">Export PNG</button>' +
+        '<button type="button" data-act="json" title="Download just this grid; Import → Append adds it">Grid file (.json)</button>' +
+        '<button type="button" data-act="dup">Duplicate</button>' +
+        '<button type="button" class="danger" data-act="del">Delete</button></div>' +
+        rulesHtml(grid) +
+        '<div class="grid-scroll"><table class="trait-grid"><thead><tr>' + head + "</tr></thead><tbody>" + body + "</tbody></table></div></article>";
+    }).join("");
+    restoreGridScroll();
+  }
+
+  // The grid last touched is remembered so a refresh on the Grids tab scrolls back to it.
+  var gridToRestore = null;
+  try {
+    gridToRestore = localStorage.getItem(Tabs.GRID_KEY);
+  } catch (error) {
+    /* Nothing to restore. */
+  }
+  function restoreGridScroll() {
+    if (!gridToRestore) return;
+    var card = els.gridList.querySelector('.grid-card[data-grid="' + gridToRestore.replace(/["\\]/g, "") + '"]');
+    gridToRestore = null;
+    if (card && card !== els.gridList.firstElementChild) card.scrollIntoView({ block: "start" });
+  }
+  function rememberGrid(grid) {
+    try {
+      localStorage.setItem(Tabs.GRID_KEY, grid.id);
+    } catch (error) {
+      /* Optional. */
+    }
+  }
+
+  function gridOf(el) {
+    var card = el.closest(".grid-card");
+    if (!card) return null;
+    var id = card.getAttribute("data-grid");
+    return grids.find(function (g) { return g.id === id; }) || null;
+  }
+
+  document.getElementById("grid-add").addEventListener("click", function () {
+    grids.push(Grids.makeGrid("Grid " + (grids.length + 1)));
+    saveGrids();
+    renderGrids();
+  });
+  els.gridList.addEventListener("click", function (event) {
+    var pick = event.target.closest(".grid-pick");
+    if (pick) {
+      if (gridOf(pick)) rememberGrid(gridOf(pick));
+      openFormPop(pick);
+      return;
+    }
+    var btn = event.target.closest("button[data-act]");
+    if (!btn) return;
+    var grid = gridOf(btn);
+    if (!grid) return;
+    rememberGrid(grid);
+    var act = btn.getAttribute("data-act");
+    if (act === "rule-mode" || act === "rule-del") {
+      var ruleIndex = Number(btn.getAttribute("data-i"));
+      var rule = grid.rules[ruleIndex];
+      if (rule && act === "rule-mode") {
+        var flipped = rule.mode === "exclude" ? "include" : "exclude";
+        var dupe = grid.rules.some(function (o) { return o !== rule && o.trait === rule.trait && o.mode === flipped; });
+        if (dupe) grid.rules.splice(ruleIndex, 1);
+        else rule.mode = flipped;
+      } else if (rule) grid.rules.splice(ruleIndex, 1);
+      saveGrids();
+      renderGrids();
+      return;
+    }
+    if (act === "png") {
+      exportGridPng(grid);
+      return;
+    }
+    if (act === "json") {
+      downloadBlob(new Blob([Grids.gridFileText(grid)], { type: "application/json" }), gridFileName(grid) + ".json");
+      return;
+    }
+    var i = Number(btn.getAttribute("data-i"));
+    if (act === "add-row") grid.rows.push(Grids.ALL);
+    else if (act === "add-col") grid.cols.push(Grids.ALL);
+    else if (act === "del-row" && grid.rows.length > 1) grid.rows.splice(i, 1);
+    else if (act === "del-col" && grid.cols.length > 1) grid.cols.splice(i, 1);
+    else if (act === "dup") {
+      var copy = Grids.makeGrid(grid.name + " copy");
+      copy.rows = grid.rows.slice();
+      copy.cols = grid.cols.slice();
+      copy.picks = JSON.parse(JSON.stringify(grid.picks || {}));
+      copy.rules = JSON.parse(JSON.stringify(grid.rules || []));
+      copy.unique = Boolean(grid.unique);
+      grids.splice(grids.indexOf(grid) + 1, 0, copy);
+    } else if (act === "del") {
+      if (!window.confirm("Delete the grid “" + grid.name + "”?")) return;
+      grids.splice(grids.indexOf(grid), 1);
+    }
+    saveGrids();
+    renderGrids();
+  });
+  els.gridList.addEventListener("change", function (event) {
+    var grid = gridOf(event.target);
+    if (!grid) return;
+    if (event.target.matches("select[data-axis]")) {
+      var isRow = event.target.getAttribute("data-axis") === "row";
+      var list = isRow ? grid.rows : grid.cols;
+      var value = event.target.value;
+      if (value.indexOf("addall:") === 0) {
+        var ids = Grids.categoryTraits(traitList, traitGroups[Number(value.slice(7))]);
+        if (isRow) grid.rows = Grids.fillAxis(grid.rows, ids);
+        else grid.cols = Grids.fillAxis(grid.cols, ids);
+      } else {
+        list[Number(event.target.getAttribute("data-i"))] = value;
+      }
+      saveGrids();
+      renderGrids();
+    } else if (event.target.matches(".grid-title-input")) {
+      grid.name = event.target.value.trim() || "Grid";
+      saveGrids();
+    } else if (event.target.matches(".rule-select")) {
+      var trait = event.target.value;
+      if (trait && !grid.rules.some(function (o) { return o.trait === trait && o.mode === "include"; })) {
+        grid.rules.push({ trait: trait, mode: "include" });
+      }
+      saveGrids();
+      renderGrids();
+    } else if (event.target.matches(".rule-unique-box")) {
+      grid.unique = event.target.checked;
+      saveGrids();
+      renderGrids();
+    }
+  });
+
+  // ---- Form picker popover ----
+  var formPop = document.createElement("div");
+  formPop.className = "form-pop";
+  formPop.hidden = true;
+  formPop.setAttribute("role", "dialog");
+  formPop.setAttribute("aria-label", "Choose a picture");
+  document.body.appendChild(formPop);
+  var formPopFor = null;
+
+  function closeFormPop(refocus) {
+    if (formPop.hidden) return;
+    formPop.hidden = true;
+    var back = formPopFor;
+    formPopFor = null;
+    if (refocus && back && document.body.contains(back.button)) back.button.focus({ preventScroll: true });
+  }
+
+  function openFormPop(button) {
+    var grid = gridOf(button);
+    var mon = state().byId.get(Number(button.getAttribute("data-id")));
+    if (!grid || !mon) return;
+    var r = Number(button.getAttribute("data-r"));
+    var c = Number(button.getAttribute("data-c"));
+    var rowTrait = grid.rows[r];
+    var colTrait = grid.cols[c];
+    var forms = mon.forms || [];
+    if (forms.length < 2) {
+      openSpecies(mon.id);
+      return;
+    }
+    var current = Grids.cellForm(grid, mon, rowTrait, colTrait);
+    var auto = forms[Grids.defaultFormIndex(mon, rowTrait, colTrait)];
+    formPopFor = { button: button, gridId: grid.id, rowTrait: rowTrait, colTrait: colTrait, mon: mon };
+    formPop.innerHTML = '<div class="form-pop-head"><strong>' + esc(mon.name) + '</strong><button type="button" class="form-pop-x" data-pop="close" aria-label="Close">×</button></div>' +
+      '<div class="form-pop-list">' + forms.map(function (form, i) {
+        var on = current && form.name === current.name;
+        return '<button type="button" class="form-pop-item' + (on ? " on" : "") + '" data-form="' + i + '" aria-pressed="' + on +
+          '" title="' + esc(form.name + (form === auto ? " (best fit)" : "")) + '">' +
+          '<span class="form-pop-art">' + portraitHtml(form.art, form.pixel, form.name) + "</span>" +
+          '<span class="form-pop-name">' + esc(form.name) + "</span></button>";
+      }).join("") + "</div>" +
+      '<div class="form-pop-foot"><button type="button" data-pop="details">Details</button></div>';
+    formPop.hidden = false;
+    var rect = button.getBoundingClientRect();
+    var w = formPop.offsetWidth;
+    var h = formPop.offsetHeight;
+    var left = Math.min(Math.max(8, rect.left + rect.width / 2 - w / 2), window.innerWidth - w - 8);
+    var top = rect.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 6);
+    formPop.style.left = Math.round(Math.max(8, left)) + "px";
+    formPop.style.top = Math.round(top) + "px";
+    var focus = formPop.querySelector(".form-pop-item.on") || formPop.querySelector(".form-pop-item");
+    if (focus) focus.focus({ preventScroll: true });
+  }
+
+  formPop.addEventListener("click", function (event) {
+    var ctx = formPopFor;
+    if (!ctx) return;
+    var target = event.target.closest("button");
+    if (!target) return;
+    if (target.getAttribute("data-pop") === "close") {
+      closeFormPop(true);
+      return;
+    }
+    if (target.getAttribute("data-pop") === "details") {
+      closeFormPop(false);
+      openSpecies(ctx.mon.id);
+      return;
+    }
+    var index = Number(target.getAttribute("data-form"));
+    var form = ctx.mon.forms[index];
+    var grid = grids.find(function (g) { return g.id === ctx.gridId; });
+    if (!form || !grid) return;
+    // Choosing the best-fit form clears the pick, so the cell keeps following its traits.
+    var auto = Grids.defaultFormIndex(ctx.mon, ctx.rowTrait, ctx.colTrait);
+    Grids.setPick(grid, ctx.rowTrait, ctx.colTrait, ctx.mon.id, index === auto ? null : form.name);
+    saveGrids();
+    var r = ctx.button.getAttribute("data-r");
+    var c = ctx.button.getAttribute("data-c");
+    closeFormPop(false);
+    renderGrids();
+    var again = els.gridList.querySelector('.grid-card[data-grid="' + grid.id + '"] .grid-pick[data-r="' + r + '"][data-c="' + c + '"]');
+    if (again) again.focus({ preventScroll: true });
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !formPop.hidden) closeFormPop(true);
+  });
+  document.addEventListener("mousedown", function (event) {
+    if (!formPop.hidden && !formPop.contains(event.target) && !event.target.closest(".grid-pick")) closeFormPop(false);
+  });
+  window.addEventListener("resize", function () { closeFormPop(false); });
+  els.gridList.addEventListener("scroll", function () { closeFormPop(false); }, true);
+
+  // ---- Grid export ----
+  function downloadBlob(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  function gridFileName(grid) {
+    return "pokeranker-grid-" + (grid.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "grid");
+  }
+
+  function loadImage(src) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () { resolve(img); };
+      img.onerror = function () { resolve(null); };
+      img.src = src;
+    });
+  }
+
+  // From file:// the browser marks drawn artwork as foreign and refuses to save the canvas,
+  // so there we draw the bundled data-URL thumbnails (data/thumbs/*.js, loaded on demand).
+  var thumbChunksLoaded = {};
+  function loadThumbChunk(n) {
+    if (!thumbChunksLoaded[n]) {
+      thumbChunksLoaded[n] = new Promise(function (resolve) {
+        var script = document.createElement("script");
+        script.src = "data/thumbs/t" + (n < 10 ? "0" : "") + n + ".js";
+        script.onload = function () { resolve(); };
+        script.onerror = function () { resolve(); };
+        document.head.appendChild(script);
+      });
+    }
+    return thumbChunksLoaded[n];
+  }
+
+  function exportImages(files, useThumbs) {
+    var unique = Array.from(new Set(files.filter(Boolean)));
+    var ready = useThumbs ? Promise.all(Array.from(new Set(unique.map(Grids.thumbChunk))).map(loadThumbChunk)) : Promise.resolve();
+    return ready.then(function () {
+      var thumbs = window.POKERANKER_THUMBS || {};
+      return Promise.all(unique.map(function (file) {
+        var src = useThumbs ? thumbs[file] : artUrl(file);
+        return src ? loadImage(src) : null;
+      }));
+    }).then(function (images) {
+      var map = new Map();
+      unique.forEach(function (file, i) { if (images[i]) map.set(file, images[i]); });
+      return map;
+    });
+  }
+
+  function wrapLines(ctx, text, width, maxLines) {
+    var words = String(text).split(/\s+/);
+    var lines = [];
+    var line = "";
+    words.forEach(function (word) {
+      var test = line ? line + " " + word : word;
+      if (ctx.measureText(test).width <= width || !line) line = test;
+      else {
+        lines.push(line);
+        line = word;
+      }
+    });
+    if (line) lines.push(line);
+    if (lines.length > maxLines) {
+      lines = lines.slice(0, maxLines);
+      var last = lines[maxLines - 1];
+      while (last.length > 1 && ctx.measureText(last + "…").width > width) last = last.slice(0, -1);
+      lines[maxLines - 1] = last + "…";
+    }
+    return lines.map(function (l) {
+      while (l.length > 1 && ctx.measureText(l).width > width) l = l.slice(0, -2) + "…";
+      return l;
+    });
+  }
+
+  function drawGrid(grid, images) {
+    var rows = state().rows;
+    var CELL = 112;
+    var HEAD = 128;
+    var PAD = 16;
+    var summary = Grids.rulesText(grid, function (t) { return gridTraitName.get(t); });
+    var TITLE = summary ? 70 : 48;
+    var cells = Grids.gridCells(grid, rows);
+    var colHead = 52;
+    var scale = 2;
+    var width = PAD * 2 + HEAD + CELL * grid.cols.length;
+    var height = PAD * 2 + TITLE + colHead + CELL * grid.rows.length + 18;
+    var canvas = document.createElement("canvas");
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    var ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+    var font = "system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+    ctx.fillStyle = "#fbfaf7";
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "#1f2328";
+    ctx.font = "700 22px " + font;
+    ctx.textBaseline = "middle";
+    ctx.fillText(wrapLines(ctx, grid.name, width - PAD * 2, 1)[0], PAD, PAD + 16);
+    if (summary) {
+      ctx.fillStyle = "#4b5058";
+      ctx.font = "13px " + font;
+      ctx.fillText(wrapLines(ctx, "Every cell: " + summary, width - PAD * 2, 1)[0], PAD, PAD + 42);
+      ctx.fillStyle = "#1f2328";
+    }
+    var x0 = PAD + HEAD;
+    var y0 = PAD + TITLE + colHead;
+    ctx.font = "600 12px " + font;
+    ctx.textAlign = "center";
+    grid.cols.forEach(function (trait, c) {
+      var lines = wrapLines(ctx, gridTraitName.get(trait) || trait, CELL - 8, 3);
+      lines.forEach(function (line, i) {
+        ctx.fillText(line, x0 + c * CELL + CELL / 2, y0 - colHead / 2 + (i - (lines.length - 1) / 2) * 15);
+      });
+    });
+    ctx.textAlign = "right";
+    grid.rows.forEach(function (trait, r) {
+      var lines = wrapLines(ctx, gridTraitName.get(trait) || trait, HEAD - 12, 4);
+      lines.forEach(function (line, i) {
+        ctx.fillText(line, x0 - 8, y0 + r * CELL + CELL / 2 + (i - (lines.length - 1) / 2) * 15);
+      });
+    });
+    grid.rows.forEach(function (rowTrait, r) {
+      grid.cols.forEach(function (colTrait, c) {
+        var x = x0 + c * CELL;
+        var y = y0 + r * CELL;
+        ctx.fillStyle = (r + c) % 2 ? "#f1efe9" : "#ffffff";
+        ctx.fillRect(x, y, CELL, CELL);
+        var found = cells[r][c];
+        ctx.textAlign = "center";
+        if (!found.best) {
+          ctx.fillStyle = "#9aa0a6";
+          ctx.font = "16px " + font;
+          ctx.fillText("–", x + CELL / 2, y + CELL / 2);
+          return;
+        }
+        var mon = found.best.pokemon;
+        var form = Grids.cellForm(grid, mon, rowTrait, colTrait) || mon;
+        var img = images.get(form.art || mon.art);
+        if (img) {
+          var box = CELL - 26;
+          var ratio = Math.min(box / img.naturalWidth, box / img.naturalHeight);
+          var w = img.naturalWidth * ratio;
+          var h = img.naturalHeight * ratio;
+          ctx.imageSmoothingEnabled = !form.pixel;
+          ctx.drawImage(img, x + (CELL - w) / 2, y + 4 + (box - h) / 2, w, h);
+        }
+        ctx.fillStyle = "#1f2328";
+        ctx.font = "600 11px " + font;
+        ctx.fillText(wrapLines(ctx, form.kind === "default" || !form.name ? mon.name : form.name, CELL - 8, 1)[0], x + CELL / 2, y + CELL - 11);
+        ctx.font = "700 10px " + font;
+        var badge = "#" + found.best.rank;
+        var bw = ctx.measureText(badge).width + 8;
+        ctx.fillStyle = "#1f2328";
+        ctx.fillRect(x + 3, y + 3, bw, 15);
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "left";
+        ctx.fillText(badge, x + 7, y + 11);
+      });
+    });
+    ctx.strokeStyle = "#d6d2c8";
+    ctx.lineWidth = 1;
+    for (var i = 0; i <= grid.cols.length; i++) {
+      ctx.beginPath();
+      ctx.moveTo(x0 + i * CELL + 0.5, y0);
+      ctx.lineTo(x0 + i * CELL + 0.5, y0 + grid.rows.length * CELL);
+      ctx.stroke();
+    }
+    for (var j = 0; j <= grid.rows.length; j++) {
+      ctx.beginPath();
+      ctx.moveTo(x0, y0 + j * CELL + 0.5);
+      ctx.lineTo(x0 + grid.cols.length * CELL, y0 + j * CELL + 0.5);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#6b7078";
+    ctx.font = "11px " + font;
+    ctx.textAlign = "right";
+    ctx.fillText("PokéRanker", width - PAD, height - PAD);
+    return canvas;
+  }
+
+  function gridArtFiles(grid) {
+    var rows = state().rows;
+    var files = [];
+    var cells = Grids.gridCells(grid, rows);
+    grid.rows.forEach(function (rowTrait, r) {
+      grid.cols.forEach(function (colTrait, c) {
+        var found = cells[r][c];
+        if (!found.best) return;
+        var form = Grids.cellForm(grid, found.best.pokemon, rowTrait, colTrait) || found.best.pokemon;
+        files.push(form.art || found.best.pokemon.art);
+      });
+    });
+    return files;
+  }
+
+  function canvasBlob(canvas) {
+    return new Promise(function (resolve, reject) {
+      try {
+        canvas.toBlob(function (blob) { if (blob) resolve(blob); else reject(new Error("empty")); }, "image/png");
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  function renderGridPng(grid) {
+    var files = gridArtFiles(grid);
+    var thumbsFirst = location.protocol === "file:";
+    function attempt(useThumbs) {
+      return exportImages(files, useThumbs).then(function (images) { return canvasBlob(drawGrid(grid, images)); });
+    }
+    return attempt(thumbsFirst).catch(function (error) {
+      if (thumbsFirst) throw error;
+      return attempt(true);
+    });
+  }
+  window.PokeRankerExportGrid = function (id) {
+    var grid = grids.find(function (g) { return g.id === id; });
+    return grid ? renderGridPng(grid) : Promise.reject(new Error("no grid"));
+  };
+
+  function exportGridPng(grid) {
+    renderGridPng(grid).then(function (blob) {
+      downloadBlob(blob, gridFileName(grid) + ".png");
+    }).catch(function () {
+      ranker.setNotice("Could not draw that grid as a picture.");
+      render();
+    });
+  }
+
+  els.viewGrids.addEventListener("click", function () {
+    view = "grids";
+    render();
+  });
+
   document.getElementById("view-model").addEventListener("click", function () {
     view = "model";
     render();
@@ -1199,7 +1851,10 @@
   }, true);
 
   document.getElementById("export").addEventListener("click", function () {
-    var blob = new Blob([ranker.exportText()], { type: "application/json" });
+    // The history export plus the grids. Older readers ignore the extra field.
+    var payload = JSON.parse(ranker.exportText());
+    payload.grids = Grids.sanitize(grids);
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var link = document.createElement("a");
     link.href = url;
@@ -1235,7 +1890,22 @@
     els.importModal.hidden = true;
     if (text === null || !mode) return;
     try {
+      if (Grids.isGridFile(text)) {
+        // A single-grid file only carries grids: Append adds them, Replace swaps the grid list. History is untouched.
+        var only = Grids.gridsFromExport(text) || [];
+        grids = mode === "append" ? Grids.mergeGrids(grids, only) : only;
+        saveGrids();
+        view = "grids";
+        render();
+        return;
+      }
       ranker.importText(text, mode);
+      // Files without grids (older exports) leave the current grids alone.
+      var incoming = Grids.gridsFromExport(text);
+      if (incoming) {
+        grids = mode === "append" ? Grids.mergeGrids(grids, incoming) : incoming;
+        saveGrids();
+      }
     } catch (error) {
       ranker.setNotice(error instanceof Error ? error.message : "Could not import that file.");
     }
