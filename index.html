@@ -161,6 +161,11 @@
           A species you have barely ranked stays near the strength its categories predict, because the prior pulls b toward 0.
           Rankings lists the full strength s for every species. A positive weight means species with that column on have been winning your duels.
         </p>
+        <p>
+          The next duel is the pair with the most expected information, weighted toward both ends of the order and toward the top:
+          full focus on roughly your top 10, fading quickly after (a smooth shoulder: about 0.9 at rank 10, 0.1 at rank 25, averaged over how unsure each rank is, with no hard cut).
+          Two top-10 species get close to 1.9× the score.
+        </p>
       </div>
       <dl class="facts" id="model-facts"></dl>
       <h2 class="sheet-sub">Linear weights</h2>

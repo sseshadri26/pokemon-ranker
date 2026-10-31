@@ -228,19 +228,34 @@ describe("Mono type and Dual type", () => {
   });
 });
 
-describe("top-25 focus in the pair selector", () => {
+describe("smooth top-shoulder focus in the pair selector", () => {
   const F = require("../js/model.js");
-  it("top probabilities are high above the cut, about half at it, low below", () => {
-    const n = 60;
-    const strength = Float64Array.from({ length: n }, (_, i) => i / 10);
-    const model = { ids: Array.from({ length: n }, (_, i) => i + 1), strength, offsetVar: new Float64Array(n).fill(0.04) };
-    const order = Array.from({ length: n }, (_, i) => i);
-    const p = F.topProbabilities(model, order, 25);
-    assert.ok(p[n - 1] > 0.99);
-    assert.ok(p[0] < 0.01);
-    assert.ok(Math.abs(p[n - 25] - 0.5) < 0.4 && p[n - 25] > 0.5 && p[n - 26] < 0.5);
+  const n = 60;
+  const order = Array.from({ length: n }, (_, i) => i);
+  const make = (v) => ({ ids: Array.from({ length: n }, (_, i) => i + 1), strength: Float64Array.from({ length: n }, (_, i) => i / 10), offsetVar: new Float64Array(n).fill(v) });
+  const at = (w, rank) => w[n - rank];
+  it("is about 0.9 at rank 10 and 0.1 at rank 25, with no jump", () => {
+    const w = F.topShoulderWeights(make(0), order, 17.5, 3.4);
+    assert.ok(at(w, 1) > 0.98);
+    assert.ok(Math.abs(at(w, 10) - 0.9) < 0.01);
+    assert.ok(Math.abs(at(w, 14) - 0.74) < 0.01);
+    assert.ok(Math.abs(at(w, 20) - 0.32) < 0.01);
+    assert.ok(Math.abs(at(w, 25) - 0.1) < 0.01);
+    assert.ok(Math.abs(at(w, 30) - 0.025) < 0.01);
+    for (let r = 2; r <= n; r++) {
+      assert.ok(at(w, r) < at(w, r - 1));
+      assert.ok(at(w, r - 1) - at(w, r) < 0.08);
+    }
   });
-  it("weights pairs of likely top-25 species more, and boost 0 is the old selector", () => {
+  it("uncertainty blurs the shoulder; R0 0 or s 0 turns it off", () => {
+    const sharp = F.topShoulderWeights(make(0), order, 17.5, 3.4);
+    const blur = F.topShoulderWeights(make(1), order, 17.5, 3.4);
+    assert.ok(at(blur, 1) < at(sharp, 1) && at(blur, 1) > 0.5);
+    assert.ok(at(blur, 30) > at(sharp, 30));
+    assert.ok(F.topShoulderWeights(make(1), order, 0, 2).every((x) => x === 0));
+    assert.ok(F.topShoulderWeights(make(1), order, 12, 0).every((x) => x === 0));
+  });
+  it("focus is about 2x for two favourites and 1 with boost 0", () => {
     assert.equal(F.topFocusMultiplier(1, 1, 1), 2);
     assert.equal(F.topFocusMultiplier(0, 0.9, 1), 1);
     assert.equal(F.topFocusMultiplier(0.9, 0.9, 0), 1);
@@ -250,7 +265,7 @@ describe("top-25 focus in the pair selector", () => {
     let seed = 3;
     const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const model = { ids: Array.from({ length: n }, (_, i) => i + 1), strength: Float64Array.from({ length: n }, (_, i) => i / 8), offsetVar: new Float64Array(n).fill(0.5) };
-    const pair = F.selectNextPair(model, { rng, explore: 0, topN: 10, recent: [40, 39] });
+    const pair = F.selectNextPair(model, { rng, explore: 0, topShoulder: 5, topSoftness: 1, recent: [40, 39] });
     assert.ok(pair && pair.a !== pair.b);
   });
 });

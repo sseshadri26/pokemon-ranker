@@ -122,7 +122,15 @@ $$
 
 Two extremes have $m$ near 1. A favorite against a median species is near 0.6. Two median species sit on the 0.2 floor, so a middle pair is still chosen when its gain is much larger. Rank 10 of 1,025 has tail about 0.999, rank 11 is only slightly lower, and rank 346 is about 0.24.
 
-Scoring every pair of 1,025 species is unnecessary. Candidates are a window of neighbors in the current strength order (28 places, so a species at either end is already compared with a run of neighbors), extra pairs among the least-certain species, and a few hundred random pairs (more while the ranking is still flat). The shortlist is ordered by the weighted score, and the random pick among the best few uses that same order. An exploration draw, about 12% of the time, pairs a species that has been shown the least with someone else, so nobody is starved. That draw stays unweighted. Among the best few candidates the app picks at random, which keeps the next card from feeling like a fixed script. That shortlist scores in well under 100ms.
+The top of the list gets extra attention from a smooth shoulder: full focus on roughly your top 10, fading quickly after, with no hard cut. With shoulder $R_0 = 17.5$ and softness $s = 3.4$,
+
+$$
+w_i = \mathbb{E}\!\left[\frac{1}{1 + e^{(r_i - R_0)/s}}\right], \qquad \mathrm{focus} = 1 + \beta \sqrt{w_i w_j}, \quad \beta = 1.
+$$
+
+With exact ranks $w$ is about 0.9 at rank 10, 0.74 at 14, 0.32 at 20, 0.1 at 25 and 0.03 at 30, so two top-10 species get close to 1.9×. The expectation is over the species' rank uncertainty: its strength standard deviation is turned into rank places (half the number of species whose strength lies within ±1 sd of its own), and $r_i \sim \mathcal{N}(\mathrm{rank}_i, \mathrm{sd}^2)$, clamped to $[1, n]$, is averaged with 5-point Gauss–Hermite, so an unsettled species just outside the top 10 keeps some focus. The score is $I(\theta; y) \cdot m \cdot \mathrm{focus}$, times the repeat penalty. Options `topShoulder` ($R_0$; 0 or null turns the focus off), `topSoftness` ($s$) and `topBoost` ($\beta$) control it.
+
+Scoring every pair of 1,025 species is unnecessary. Candidates are a window of neighbors in the current strength order (28 places, so a species at either end is already compared with a run of neighbors), extra pairs among the least-certain species, a few hundred random pairs (more while the ranking is still flat), and up to 800 draws of pairs whose two ends are each sampled with probability proportional to $w$, so the head of the list is well covered without a fixed block. The shortlist is ordered by the weighted score, and the random pick among the best few uses that same order. An exploration draw, about 12% of the time, pairs a species that has been shown the least with someone else, so nobody is starved. That draw stays unweighted. Among the best few candidates the app picks at random, which keeps the next card from feeling like a fixed script. That shortlist scores in well under 100ms.
 
 ### Why 8,800 is a floor, not a finish line
 

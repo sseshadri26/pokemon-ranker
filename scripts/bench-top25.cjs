@@ -1,11 +1,14 @@
-/* Benchmark: old vs top-25-focused pair selector on a synthetic voter.
+/* Benchmark: pair selectors on a synthetic voter, scored on the top 25 / top 10 and overall.
  * Truth = trait effects (types, generation, colour, legendary, stage) + species noise, over the real
  * 1025-species Pokédex. The voter picks A with probability sigmoid(truthA - truthB) (noisy).
  * Usage: node scripts/bench-top25.cjs [runs=3] [votes=500]   (takes a few minutes)
+ * MODEL=/path/to/model.js loads another copy of js/model.js (e.g. an older selector from git).
+ * VARIANTS='[["label",{ranker options}],...]' picks the selectors (default: no focus vs default).
  */
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
+if (process.env.MODEL) globalThis.Favordex = require(path.resolve(process.env.MODEL));
 const { createRanker } = require("../js/ranker.js");
 
 const box = {};
@@ -76,9 +79,12 @@ function metrics(state, truth) {
   const trueRank = ranksOf(ids, (id) => truth.get(id));
   const top = ids.filter((id) => trueRank.get(id) <= 25);
   const estTop = new Set(state.rows.slice(0, 25).map((row) => row.pokemon.id));
+  const est10 = new Set(state.rows.slice(0, 10).map((row) => row.pokemon.id));
   return {
+    tau10: kendall(ids.filter((id) => trueRank.get(id) <= 10), (id) => truth.get(id), (id) => est.get(id)),
     tau: kendall(top, (id) => truth.get(id), (id) => est.get(id)),
     recall: top.filter((id) => estTop.has(id)).length / 25,
+    recall10: ids.filter((id) => trueRank.get(id) <= 10).filter((id) => est10.has(id)).length / 10,
     rho: spearman(ids.map((id) => ({ id, v: truth.get(id) })), ids.map((id) => ({ id, v: est.get(id) }))),
   };
 }
@@ -102,20 +108,20 @@ function run(seed, opts) {
 
 const totals = {};
 for (let s = FIRST; s < FIRST + RUNS; s++) {
-  const variants = process.env.VARIANTS ? JSON.parse(process.env.VARIANTS) : [["old", { topBoost: 0 }], ["new", {}]];
+  const variants = process.env.VARIANTS ? JSON.parse(process.env.VARIANTS) : [["nofocus", { topBoost: 0 }], ["default", {}]];
   for (const [label, opts] of variants) {
     const res = run(s, opts);
     CHECKS.forEach((v) => {
       const k = label + v;
-      totals[k] = totals[k] || { tau: 0, recall: 0, rho: 0 };
-      ["tau", "recall", "rho"].forEach((m) => (totals[k][m] += res[v][m] / RUNS));
+      totals[k] = totals[k] || { tau10: 0, tau: 0, recall: 0, recall10: 0, rho: 0 };
+      ["tau10", "tau", "recall", "recall10", "rho"].forEach((m) => (totals[k][m] += res[v][m] / RUNS));
     });
     process.stderr.write(`seed ${s} ${label} done\n`);
   }
 }
-console.log("votes | selector | top-25 Kendall tau | top-25 recall | overall Spearman");
-const labels = (process.env.VARIANTS ? JSON.parse(process.env.VARIANTS) : [["old"], ["new"]]).map((v) => v[0]);
+console.log("votes | selector | top-10 recall | top-10 Kendall tau | top-25 recall | top-25 Kendall tau | overall Spearman");
+const labels = (process.env.VARIANTS ? JSON.parse(process.env.VARIANTS) : [["nofocus"], ["default"]]).map((v) => v[0]);
 CHECKS.forEach((v) => labels.forEach((l) => {
   const t = totals[l + v];
-  console.log(`${v} | ${l} | ${t.tau.toFixed(3)} | ${t.recall.toFixed(3)} | ${t.rho.toFixed(3)}`);
+  console.log(`${v} | ${l} | ${t.recall10.toFixed(3)} | ${t.tau10.toFixed(3)} | ${t.recall.toFixed(3)} | ${t.tau.toFixed(3)} | ${t.rho.toFixed(3)}`);
 }));

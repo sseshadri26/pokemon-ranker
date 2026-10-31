@@ -1385,36 +1385,50 @@ function totalEffects(X, rows, cols, names, weights, network) {
         return { name, kind: kind[k], linear, mean, sd: Math.sqrt(ss / Math.max(1, rows)), p10: q(0.1), p90: q(0.9), colSd: colSd[k] };
     });
 }
-/** Standard normal CDF (Abramowitz–Stegun 7.1.26 via erf). */
-function normalCdf(x) {
-    const t = 1 / (1 + 0.3275911 * Math.abs(x) / Math.SQRT2);
-    const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-(x * x) / 2);
-    return x >= 0 ? 0.5 * (1 + y) : 0.5 * (1 - y);
-}
+/** Probabilists' Gauss–Hermite nodes and weights (5 points) for E[f(Z)], Z ~ N(0, 1). */
+const RANK_GH = [[-2.856970013872806, 0.011257411327720691], [-1.3556261799742659, 0.2220759220056126], [0, 0.5333333333333333], [1.3556261799742659, 0.2220759220056126], [2.856970013872806, 0.011257411327720691]];
 /**
- * P(species is in the top K): its strength against the cut halfway between ranks K and K+1,
- * scaled by its own uncertainty. Near 1 for settled favourites, about 0.5 on the boundary.
+ * Smooth top shoulder for every species: w = 1 / (1 + exp((rank − R0)/s)), rank 1 the favourite.
+ * With R0 = 17.5, s = 3.4 it is ≈0.9 at rank 10, 0.74 at 14, 0.32 at 20, 0.1 at 25 and 0.03 at 30,
+ * with no hard cut. Uncertainty-aware: a species' strength sd is turned into rank places (half the
+ * number of species whose strength lies within ±1 sd of its own), and w is the expected weight over
+ * rank ~ N(rank, sd²) clamped to [1, n] (5-point Gauss–Hermite). R0 null/≤0 or s ≤ 0 gives all zeros.
  */
-function topProbabilities(model, order, topN) {
+function topShoulderWeights(model, order, shoulder, softness) {
     const n = order.length;
-    const p = new Float64Array(n);
-    if (topN <= 0 || topN >= n)
-        return p.fill(topN >= n ? 1 : 0);
-    const cut = (model.strength[order[n - topN]] + model.strength[order[n - topN - 1]]) / 2;
-    for (let i = 0; i < n; i++) {
-        const sd = Math.sqrt(Math.max(model.offsetVar[i] ?? 0, 0) + 0.01);
-        p[i] = normalCdf((model.strength[i] - cut) / sd);
+    const w = new Float64Array(n);
+    if (!(shoulder > 0) || !(softness > 0))
+        return w;
+    const sorted = Float64Array.from(order, (k) => model.strength[k]); // ascending
+    const below = (x) => {
+        let lo = 0, hi = n;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (sorted[mid] < x) lo = mid + 1; else hi = mid;
+        }
+        return lo;
+    };
+    for (let pos = 0; pos < n; pos++) {
+        const k = order[pos];
+        const s = model.strength[k];
+        const sd = Math.sqrt(Math.max(model.offsetVar?.[k] ?? 0, 0));
+        const rankSd = sd > 0 ? Math.max(0, (below(s + sd) - below(s - sd) - 1) / 2) : 0;
+        const rank = n - pos;
+        let e = 0;
+        for (const [z, g] of RANK_GH) {
+            const r = Math.min(n, Math.max(1, rank + z * rankSd));
+            e += g / (1 + Math.exp((r - shoulder) / softness));
+        }
+        w[k] = e;
     }
-    return p;
+    return w;
 }
 /**
- * Extra weight for pairs that decide the top of the list: 1 + boost·√(p_i·p_j) (boost 1 by default;
- * scripts/bench-top25.cjs found 3 and 6 traded too much overall accuracy for top-25 recall).
- * Two likely top-K species (ordering inside the top) get the most; a boundary pair
- * (p ≈ 0.5 each) about half; pairs with no top-K chance stay at 1.
+ * Extra weight for pairs near the top of the list: 1 + boost·√(w_i·w_j) (boost 1 by default).
+ * Two #1-ish species get about 2×, and it decays smoothly down the list.
  */
-function topFocusMultiplier(pA, pB, boost) {
-    return 1 + boost * Math.sqrt(pA * pB);
+function topFocusMultiplier(wA, wB, boost) {
+    return 1 + boost * Math.sqrt(wA * wB);
 }
 function selectNextPair(model, options = {}) {
     const n = model.ids.length;
@@ -1442,18 +1456,20 @@ function selectNextPair(model, options = {}) {
     }
     const order = orderByStrength(model.strength, n);
     const tails = tailsInOrder(order);
-    // Top-of-list focus (topN = 0 turns it off and gives the older selector).
-    const topN = Math.min(options.topN ?? 25, n);
+    // Smooth top-of-list focus (topShoulder 0/null, topSoftness 0 or topBoost 0 turns it off).
+    const shoulder = options.topShoulder === undefined ? 17.5 : options.topShoulder;
+    const softness = options.topSoftness ?? 3.4;
     const topBoost = options.topBoost ?? 1;
-    const pTop = topProbabilities(model, order, topBoost > 0 ? topN : 0);
+    const focusOn = topBoost > 0 && shoulder > 0 && softness > 0;
+    const weight = focusOn ? topShoulderWeights(model, order, shoulder, softness) : null;
     const candidates = collectCandidates(model, order, window, rng);
-    if (topBoost > 0 && topN > 0 && options.topPairs !== false)
-        addTopPairs(candidates, order, Math.min(n, Math.round(topN * 1.6)));
+    if (focusOn && options.topPairs !== false)
+        addWeightedPairs(candidates, weight, options.topPairCount ?? 800, rng);
     let best = [];
     for (const [i, j] of candidates) {
         const mu = model.strength[i] - model.strength[j];
         const gain = expectedInformationGain(mu, differenceVariance(model, i, j));
-        const focus = topBoost > 0 ? topFocusMultiplier(pTop[i], pTop[j], topBoost) : 1;
+        const focus = focusOn ? topFocusMultiplier(weight[i], weight[j], topBoost) : 1;
         const score = gain * pairTailMultiplier(tails[i], tails[j]) * focus * repeatPenalty(i) * repeatPenalty(j);
         best.push({ i, j, gain, score });
     }
@@ -1478,19 +1494,38 @@ function selectNextPair(model, options = {}) {
         infoGain: choice.gain,
     };
 }
-/** Every pair among the current top `m` (ranks 1..m), so the head of the list is always a candidate. */
-function addTopPairs(pairs, order, m) {
-    const n = order.length;
+/**
+ * Up to `count` extra candidate pairs, both ends drawn with probability ∝ the top-shoulder weight, so the
+ * head of the list is well covered without a fixed cut-off. Duplicates are skipped.
+ */
+function addWeightedPairs(pairs, weight, count, rng) {
+    const n = weight.length;
+    if (n < 2 || count <= 0)
+        return;
+    const cum = new Float64Array(n);
+    let total = 0;
+    for (let k = 0; k < n; k++)
+        cum[k] = total += weight[k];
+    if (!(total > 0))
+        return;
+    const draw = () => {
+        const x = rng() * total;
+        let lo = 0, hi = n - 1;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (cum[mid] <= x) lo = mid + 1; else hi = mid;
+        }
+        return lo;
+    };
     const seen = new Set(pairs.map(([i, j]) => i * n + j));
-    const head = order.slice(n - m);
-    for (let u = 0; u < head.length; u++) {
-        for (let v = u + 1; v < head.length; v++) {
-            const lo = Math.min(head[u], head[v]);
-            const hi = Math.max(head[u], head[v]);
-            if (!seen.has(lo * n + hi)) {
-                seen.add(lo * n + hi);
-                pairs.push([lo, hi]);
-            }
+    for (let t = 0; t < count; t++) {
+        const i = draw(), j = draw();
+        if (i === j)
+            continue;
+        const lo = Math.min(i, j), hi = Math.max(i, j);
+        if (!seen.has(lo * n + hi)) {
+            seen.add(lo * n + hi);
+            pairs.push([lo, hi]);
         }
     }
 }
@@ -1734,7 +1769,7 @@ function strengthBreakdown(row, weights, network, offset, names) {
     differenceVariance: differenceVariance,
     tailWeight: tailWeight,
     totalEffects: totalEffects,
-    topProbabilities: topProbabilities,
+    topShoulderWeights: topShoulderWeights,
     topFocusMultiplier: topFocusMultiplier,
     pairTailMultiplier: pairTailMultiplier,
     selectNextPair: selectNextPair,
